@@ -1,0 +1,3065 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Configurator</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.css" onerror="this.onerror=null;this.href='./xterm.css'" />
+    
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.js"></script>
+    <script>window.Terminal || document.write('<script src="./xterm.js"><\/script>');</script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.js"></script>
+    <script>window.FitAddon || document.write('<script src="./xterm-addon-fit.js"><\/script>');</script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
+    
+    <style>
+        /* 일반 스타일 */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { height: 100vh; width: 100vw; background-color: #f0f2f5; font-family: 'Malgun Gothic', sans-serif; overflow: hidden; }
+
+        /* 로그인 화면 스타일 */
+        #login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            background: linear-gradient(135deg, #1a237e 0%, #3f51b5 100%);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            width: 380px;
+            text-align: center;
+        }
+        .login-box h1 { color: #1a237e; margin-bottom: 10px; font-size: 22px; }
+        .login-box p { color: #666; font-size: 13px; margin-bottom: 25px; }
+        .login-field { margin-bottom: 15px; text-align: left; }
+        .login-field label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #333; }
+        .login-field input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; transition: border 0.3s; }
+        .login-field input:focus { border-color: #3f51b5; }
+        .btn-login { width: 100%; padding: 12px; background-color: #1a237e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; transition: background 0.3s; }
+        .btn-login:hover { background-color: #0d1440; }  
+        
+        :root {
+            --bg-page: #f3f4f6;
+            --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --bg-card: #ffffff;
+            --border-color: #e5e7eb;
+            --bg-input: #f9fafb;
+            --bg-table-header: #f3f4f6;
+            --bg-empty: #f9fafb;
+            --bg-yellow: #fef08a;
+            --bg-red: #fee2e2;
+            --btn-bg: #3b82f6;
+            --btn-hover: #2563eb;
+        }
+
+        body.dark-mode {
+            --bg-page: #111827;
+            --text-main: #e5e7eb;
+            --text-sub: #9ca3af;
+            --bg-card: #1f2937;
+            --border-color: #374151;
+            --bg-input: #111827;
+            --bg-table-header: #374151;
+            --bg-empty: #1f2937;
+            --bg-yellow: #5c4f17;
+            --bg-red: #5c1a1f;
+        }
+    
+        /* 비교 결과 레이아웃 스타일 */
+        .diff-row { display: flex; border-bottom: 1px solid var(--border-color); min-height: 28px; }
+        .diff-cell { 
+            flex: 1; 
+            padding: 6px 12px; 
+            font-family: 'Consolas', monospace; 
+            font-size: 13px; 
+            white-space: pre-wrap; 
+            word-break: break-all; 
+            line-height: 1.5; 
+            color: var(--text-main); /* [추가됨] 테마에 따라 글자색 자동 변경 */
+        }
+        .diff-cell.left { border-right: 1px solid var(--border-color); }
+        .bg-yellow { background-color: var(--bg-yellow); }
+        .bg-red { background-color: var(--bg-red); }
+        .empty-line { background-color: var(--bg-empty); opacity: 0.6; }
+
+        /* 메인화면(로그인후) - 3분할 레이아웃 */
+        .app-container { display: none; height: 100vh; width: 100vw; flex-direction: row; }
+        .sidebar { width: 320px; min-width: 320px; background-color: #ffffff; border-right: 1px solid #cfd8dc; padding: 12px; overflow-y: auto; }
+        .right-panel { flex: 1; display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+
+        /* 상단 설정 영역 */
+        .main-content { flex: 1; /*max-height: 40vh;*/ padding: 20px; overflow-y: auto; background-color: #f8f9fa; border-bottom: 2px solid #ddd; }
+        h2 { margin-bottom: 10px; color: #1a237e; font-size: 17px; border-bottom: 2px solid #3f51b5; padding-bottom: 5px; }
+        h3 { margin: 12px 0 6px; color: #000; font-size: 16px; font-weight: 800; display: flex; align-items: center; }
+        h3::before { content: ""; width: 3px; height: 11px; background: #3f51b5; margin-right: 6px; border-radius: 2px; }
+        .form-group { margin-bottom: 8px; }
+        .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .form-row .form-group { flex: 1; margin-bottom: 0; min-width: 0; }
+        label { display: block; margin-bottom: 2px; font-weight: bold; color: #333; font-size: 12px; }
+        select, input { width: 100%; padding: 6px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; outline: none; }
+        input[readonly] { background-color: #e8f0fe; font-weight: bold; cursor: default; }
+        .vlan-btn-group { display: flex; gap: 8px; margin-top: 5px; }
+        .vlan-btn { flex: 1; padding: 8px; border: 1px solid #ced4da; background-color: #fff; cursor: pointer; font-size: 13px; font-weight: bold; border-radius: 4px; }
+        .vlan-btn.active { background-color: #3f51b5; color: white; border-color: #3f51b5; }
+        .btn-generate { width: 100%; padding: 12px; background-color: #1a237e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; font-weight: bold; margin-top: 15px; }
+    
+        /* 하단 터미널 영역 */
+         .terminal-section { flex: 1.5; background-color: #121212; padding: 15px; display: flex; flex-direction: column; min-height: 0;}
+        .terminal-controls { display: flex; align-items: center; gap: 10px; background: #252525; padding: 10px; border-radius: 6px; margin-bottom: 8px; flex-shrink: 0; }
+        
+        .terminal-controls select, .terminal-controls button { padding: 6px 12px; border-radius: 4px; width: 90px; border: 1px solid #444; background: #333; color: white; cursor: pointer; font-size: 12px; }
+        .status-badge { font-size: 0.85em; padding: 4px 12px; border-radius: 12px; background: #444; color: #aaa; font-weight: bold; }
+        /*#terminal-container { flex: 1; width: 100%; border-radius: 4px; overflow: hidden; }*/
+        #terminal-container { flex: 1; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; background-color: #000; }
+        #baudrate { width: 90px !important; background: #333; color: white; border: 1px solid #444; }
+
+        .config-card { background: white; border-radius: 6px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; border: 1px solid #e0e0e0; }
+        .terminal-box { background: #263238; color: #eceff1; padding: 12px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; border-left: 3px solid #3f51b5; margin-bottom: 10px; }
+        .btn-copy { padding: 6px 15px; background-color: #43a047; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        @media (max-width: 900px) { .app-container { flex-direction: column; height: auto; } .sidebar { width: 100%; border-right: none; } }
+    </style>
+</head>
+<body>
+
+<div id="login-container">
+    <div class="login-box" style="position: relative; padding-bottom: 45px;">
+        <h1>Network Configurator</h1>
+        <p>인증 후 서비스를 이용하실 수 있습니다.</p>
+        <div class="login-field">
+            <label>ID</label>
+            <input type="text" id="loginId" placeholder="아이디 입력">
+        </div>
+        <div class="login-field">
+            <label>Password</label>
+            <input type="password" id="loginPw" placeholder="비밀번호 입력">
+        </div>
+        <button class="btn-login" onclick="handleLogin()">Login</button>
+
+        <button type="button" id="downloadBtn" onclick="handleDownload()" 
+                style="
+                    position: absolute;
+                    bottom: 5px;
+                    right: 5px;
+                    padding: 5px 10px;
+                    cursor: pointer;
+                    background: none;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    color: #888;
+                    transition: all 0.2s;
+                ">
+                v1.5.1
+            </button>
+        
+        </div>
+
+</div>
+
+<div id="menu-container" style="display: none; height: 100vh; width: 100vw; background: #f0f2f5; justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
+    <h1 style="color: #1a237e; margin-bottom: 20px;">서비스 선택</h1>
+    <div style="display: flex; gap: 20px;">
+        <button onclick="goToConfig()" style="width: 200px; padding: 40px 20px; background: #1a237e; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; transition: transform 0.2s;">
+            표준CONFIG
+        </button>
+        <button onclick="goToDiff()" style="width: 200px; padding: 40px 20px; background: #3b82f6; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer;">
+            텍스트 비교
+        </button>
+        <button onclick="goToCheck()" style="width: 200px; padding: 40px 20px; background: #10b981; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer;">
+            작업점검항목
+        </button>
+    </div>
+</div>
+    
+<div id="check-app-container" style="display: none; min-height: 100vh; width: 100vw; background: #f3f4f6; padding: 20px; overflow-y: auto;">
+    <div style="max-width: 1400px; margin: 0 auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <button onclick="backToMenu()" style="padding: 10px 20px; width: 140px; background: #64748b; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">메뉴로 돌아가기</button>
+            <h2 style="border: none; margin: 0; font-size: 24px;">작업 점검 항목</h2>
+            <button onclick="resetCheckApp()" style="padding: 10px 20px; width: 140px; background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">초기화</button>
+        </div>
+
+        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+            <label style="font-size: 16px; margin: 0;">장비 종류 선택:</label>
+            <select id="checkEquipType" onchange="updateCheckCommands()" style="width: 200px; padding: 10px; border: 2px solid #10b981; font-weight: bold;">
+                <option value="HL7180XG">HL7180XG</option>
+                <option value="HL7208XG">HL7208XG</option>
+                <option value="HL7301">HL7301</option>
+                <option value="HL7302">HL7302</option>
+                <option value="HL7008G">HL7008G</option>
+                <option value="SG7000G">SG7000G</option>
+                <option value="HT7000G">HT7000G</option>
+                <option value="SGL-T040G">SGL-T040G</option>
+                <option value="V8240">V8240</option>
+                <option value="V5848G">V5848G</option>
+                <option value="V5808C">V5808C</option>
+            </select>
+            <button onclick="analyzeAllLogs()" style="padding: 10px 30px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; flex-grow: 1;">작업 전/후 비교</button>
+        </div>
+
+        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+            <div style="flex: 1; background: white; padding: 15px; border-radius: 12px; border-top: 4px solid #3b82f6;">
+                <h3 style="margin-bottom: 10px;">[1] 작업 전 로그 입력</h3>
+                <textarea id="logBefore" placeholder="작업 전 'show' 로그를 붙여넣으세요..." style="width: 100%; height: 300px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; resize: vertical;"></textarea>
+            </div>
+            <div style="flex: 1; background: white; padding: 15px; border-radius: 12px; border-top: 4px solid #ef4444;">
+                <h3 style="margin-bottom: 10px;">[2] 작업 후 로그 입력</h3>
+                <textarea id="logAfter" placeholder="작업 후 'show' 로그를 붙여넣으세요..." style="width: 100%; height: 300px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; resize: vertical;"></textarea>
+            </div>
+        </div>
+
+    <div style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        <h3 style="margin-bottom: 20px; font-size: 20px; color: #333; border-left: 5px solid #10b981; padding-left: 10px;">점검 결과</h3>
+            
+        <div style="display: flex; gap: 20px; align-items: stretch;">
+            <div id="check-results-grid" style="
+                flex: 2;
+                display: grid; 
+                grid-template-columns: 1fr 1fr; 
+                gap: 20px; 
+                background: #f8f9fa; 
+                padding: 20px; 
+                border-radius: 8px;
+            ">
+            </div>
+
+            <div style="
+                flex: 1;
+                background: #f8f9fa;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                height: fit-content; /* 내용(명령어 길이)에 맞춰 독립적인 높이 가짐 */
+                ">
+                <h4 style="margin-bottom: 10px; font-size: 16px; color: #333; display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 18px;"></span> 점검 명령어
+                </h4>
+                <p style="font-size: 12px; color: #666; margin-bottom: 15px;">아래 명령어로 장비정보를 조회하세요.</p>
+                
+                <pre id="customCommandArea" style="
+                    width: 100%;
+                    padding: 15px;
+                    background: #ffffff; 
+                    color: #000000;
+                    border-radius: 6px;
+                    font-family: 'Consolas', monospace;
+                    font-size: 13px;
+                    white-space: pre-wrap; /* 화면 폭에 맞춰 자동 줄바꿈 */
+                    margin: 0;
+                    "></pre>
+                    
+                
+                </div>
+            </div>
+        </div>
+    </div>
+</div>  
+</div>  
+    
+<div class="app-container" id="main-app">
+    <div class="sidebar">
+
+        <button onclick="backToMenu()" style="width: 100%; padding: 10px; margin-bottom: 20px; background: #64748b; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;">
+            메뉴로 돌아가기
+        </button>
+
+        
+        <h2>환경 설정 메뉴</h2>
+        <h3>기본 정보</h3>
+
+        <div class="form-group">
+            <label>장비 종류</label>
+            <div class="vlan-btn-group">
+                <button type="button" class="vlan-btn active" onclick="setEquipType('ONU', this)">ONU</button>
+                <button type="button" class="vlan-btn" onclick="setEquipType('VDSL', this)">VDSL</button>
+                <button type="button" class="vlan-btn" onclick="setEquipType('AGW', this)">AGW</button>
+            </div>
+            <input type="hidden" id="selectedEquipType" value="ONU">
+        </div>
+        
+        <div class="form-group">
+            <label>Model</label>
+            <select id="deviceSelect" onchange="updateDefaultData()"></select>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group"><label>Console</label><input type="text" id="consoleInput" readonly></div>
+            <div class="form-group"><label>Version</label><input type="text" id="versionInput" readonly></div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group"><label>ID</label><input type="text" id="baseId" readonly></div>
+            <div class="form-group"><label>PW</label><input type="text" id="basePw" readonly></div>
+        </div>
+        
+        <h3>상세 정보</h3>
+        <div class="form-group">
+            <label>Hostname</label>
+            <input type="text" id="hostInput" placeholder="Hostname" class="enter-trigger">
+        </div>
+        
+        <div class="form-group">
+            <label>IP / Subnet</label>
+            <input type="text" id="ipInput" placeholder="192.168.0.1/24" class="enter-trigger">
+        </div>
+        
+        <div class="form-group" id="vlan-section">
+            <label>VLAN 선택</label>
+            <div class="vlan-btn-group">
+                <button type="button" class="vlan-btn active" onclick="setVlan(200, this)">200</button>
+                <button type="button" class="vlan-btn" onclick="setVlan(700, this)">700</button>
+            </div>
+            <input type="hidden" id="selectedVlan" value="200">
+        </div>
+       
+        <div class="form-group" id="domain-section" style="display: none;">
+            <label>Domain 입력</label>
+            <input type="text" id="domainInput" placeholder="Domain을 입력하세요">
+        </div>
+        
+        <button class="btn-generate" onclick="generateAll()">설정값 생성하기</button>
+    </div>
+
+    <div class="main-content">
+        <div class="config-card">
+            <div class="card-header"><strong>◆ [STEP.01] Restore 적용</strong></div>
+            <div id="out1" class="terminal-box">설정값을 생성하세요</div>
+            <button class="btn-copy" onclick="copyText('out1')">복사하기</button>
+        </div>
+        <div class="config-card">
+            <div class="card-header"><strong>◆ [STEP.02] CONFIG 설정</strong></div>
+            <div id="out2" class="terminal-box">설정값을 생성하세요</div>
+            <button class="btn-copy" onclick="copyText('out2')">복사하기</button>
+        </div>
+        <div class="config-card">
+            <div class="card-header"><strong>◆ [STEP.03] Password 설정</strong></div>
+            <div id="out3" class="terminal-box">설정값을 생성하세요</div>
+            <button class="btn-copy" onclick="copyText('out3')">복사하기</button>
+        </div>
+    </div>
+        
+    <div class="terminal-section">
+        <div class="terminal-controls">
+            <strong style="color:#00FF00; font-size: 14px; margin-right: 5px;">Baud rate</strong>
+                <select id="baudrate">
+                    <option value="9600" selected>9600</option>
+                    <option value="115200">115200</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                </select>
+                <button id="connect-btn" style="background:#28a745; font-weight: bold;">Connect</button>
+                <button id="disconnect-btn" style="background:#dc3545; font-weight: bold; display:none;">Disconnect</button>
+                <span id="status" class="status-badge">오프라인</span>
+                </div>
+                <div id="terminal-container"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="diff-app-container" style="display: none; min-height: 100vh; width: 100vw; background: var(--bg-page); overflow-y: auto; padding: 40px 20px;">
+    <div style="max-width: 1200px; margin: 0 auto; position: relative;">
+
+        <button onclick="backToMenu()" style="position: absolute; top: 0; left: 0; padding: 10px 18px; background: #64748b; color: white; border: none; border-radius: 25px; font-weight: 500; cursor: pointer; transition: opacity 0.2s;">
+            메뉴로 돌아가기
+        </button>
+        
+        <button id="themeToggleBtn" onclick="toggleTheme()" style="position: absolute; top: 0; right: 0; padding: 10px 18px; border-radius: 25px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main); font-weight: 500; cursor: pointer;">
+            🌙 다크 모드
+        </button>
+        
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h2 style="font-size: 28px; color: var(--text-main); border: none; margin: 0; padding: 0;">텍스트 비교</h2>
+        </div>
+
+        <div style="background: var(--bg-card); border-radius: 16px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+            <div style="display: flex; gap: 30px; margin-bottom: 20px;">
+                <div style="flex: 1;">
+                    <h3 style="color: var(--text-main); margin-bottom: 10px;">첫번째 텍스트</h3>
+                    <textarea id="text1" placeholder="여기에 텍스트를 입력하세요..." style="width: 100%; height: 250px; padding: 15px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-input); color: var(--text-main);"></textarea>
+                </div>
+                <div style="flex: 1;">
+                    <h3 style="color: var(--text-main); margin-bottom: 10px;">두번째 텍스트</h3>
+                    <textarea id="text2" placeholder="여기에 텍스트를 입력하세요..." style="width: 100%; height: 250px; padding: 15px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-input); color: var(--text-main);"></textarea>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: center; gap: 15px; margin-top: 10px;">
+                <button onclick="compareTexts()" style="font-size: 20px; width: 150px; padding: 15px; background: var(--btn-bg); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer;">비교하기</button>
+                <button onclick="resetDiff()" style="font-size: 20px; width: 150px; padding: 15px; background: #64748b; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer;">초기화</button>
+            </div> 
+        </div>
+
+        <div style="margin-top: 30px; background: var(--bg-card); border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color);">
+            <div style="display: flex; background: var(--bg-table-header); border-bottom: 1px solid var(--border-color); font-weight: bold; color: var(--text-sub); font-size: 12px;">
+                <div style="flex: 1; padding: 10px 20px; border-right: 1px solid var(--border-color); text-align: center;">첫번째 텍스트</div>
+                <div style="flex: 1; padding: 10px 20px; text-align: center;">두번째 텍스트</div>
+            </div>
+            <div id="diff-result">
+                <div style="padding: 50px; text-align: center; color: var(--text-sub);">텍스트를 입력하고 비교 버튼을 눌러주세요.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    async function sha256(message) {
+        const msgBuffer = new TextEncoder().encode(message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    
+    const AUTH_CONFIG = {
+        id: "HSDG",
+        pwHash: "c4b1377e0f05ab052334e76471b5c320125fb3dcbe9540b039db50a1411b45f7"
+    };
+    
+    const CONFIG_MODELS = {
+        "H5224G": { console: "115200", version: "1.5.1", id: "root", pw: "admin" },
+        "H5216G": { console: "115200", version: "1.5.1", id: "root", pw: "admin" },
+        "H5208G": { console: "115200", version: "1.5.1", id: "root", pw: "admin" },
+        "DSW1324G": { console: "9600", version: "1.14.7", id: "root", pw: "admin" },
+        "V2224GB": { console: "9600", version: "1.36 #0001", id: "admin", pw: "없음" },
+        "V2924GB": { console: "9600", version: "2.09 #0001", id: "admin", pw: "없음" },
+        "V2916GB": { console: "9600", version: "2.09 #0001", id: "admin", pw: "없음" },
+        "V2808M": { console: "9600", version: "1.04 #1001", id: "admin", pw: "없음" },
+        "HN5324XG": { console: "115200", version: "1.0.9", id: "root (설정이후 admin)", pw: "admin" },
+        "HN5424XG": { console: "115200", version: "1.2.4", id: "admin", pw: "changeme@!" },
+        "GNT3510": { console: "115200", version: "1.0.3", id: "root", pw: "skb_bizlan" },
+        "GNT3520": { console: "115200", version: "DGNT3520SW0062", id: "root", pw: "skb_bizlan" },
+        "V5924C": { console: "9600", version: "5.13 #2113", id: "admin", pw: "1234" },
+        "V5924O": { console: "9600", version: "5.14 #2112", id: "admin", pw: "1234" },
+        "EX-5124B PLUS": { console: "9600", version: "2.5.2r2", id: "root", pw: "1234" },
+        "VNET 2324K": { console: "9600", version: "VNET2324K_Ver1.50", id: "root", pw: "admin" },
+        "KMG-32B": { console: "38400", version: "", id: "skb_admin", pw: "skb_2012!@" },
+        "KMG-32E": { console: "38400", version: "", id: "skb_admin", pw: "skb_2012!@" },
+        "DV-232A": { console: "19200", version: "", id: "skb_admin", pw: "skb_2012!@" },
+        "DV-432A": { console: "19200", version: "", id: "skb_admin", pw: "skb_2012!@" }
+    };
+    const MODEL_GROUPS = {
+        "ONU": ["H5224G", "H5216G", "H5208G", "DSW1324G", "V2224GB", "V2924GB", "V2916GB", "V2808M", 
+                "HN5324XG", "HN5424XG", "GNT3510", "GNT3520"],
+        "VDSL": ["V5924C", "V5924O", "EX-5124B PLUS", "VNET 2324K"],
+        "AGW": ["KMG-32B", "KMG-32E", "DV-232A", "DV-432A"]
+    };
+
+    const CHECK_COMMANDS_BY_EQUIP = {
+        "HL7180XG": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp snooping group | in Total\nsh mac address-table count | in Total\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary\nsh redundancy",
+        "HL7208XG": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp snooping group | in Total\nsh mac address-table count | in Total\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary",
+        "HL7301": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp snooping group | in Total\nsh mac address-table count | in Total\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary",
+        "HL7302": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp snooping group | in Total\nsh mac address-table count | in Total\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary\nsh redundancy",
+        "SG7000G": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp groups | in TOTAL\nsh fdb count | in T\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary",
+        "HL7008G": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp snooping group | in Total\nsh mac address-table count | in Total\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary",
+        "HT7000G": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp groups | in TOTAL\nsh fdb count | in T\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary\nsh redundancy",
+        "SGL-T040G": "terminal length 0\nsh system\nsh misc\nsh run\nsh arp | in Total\nsh ip igmp groups | in TOTAL\nsh fdb count | in T\nsh gpon onu-informations\nsh ip route\nsh ip bgp summary",
+        "V8240": "terminal length 0\nsh system\nsh cpuload \nsh environment \nsh run\nsh arp\nsh ip igmp snooping groups |in Total\nsh mac | in Total\nsh onu info\nsh ip route\nsh ip bgp summary\nsh redundancy status",
+        "V5848G": "terminal length 0\nsh system\nsh cpuload \nsh environment \nsh run\nsh arp\nsh ip igmp snooping groups |in Total\nsh mac\nsh onu info\nsh ip route\nsh ip bgp summary\nsh redundancy status",
+        "V5808C": "terminal length 0\nsh system\nsh cpuload \nsh environment \nsh run\nsh arp\nsh ip igmp snooping groups |in Total\nsh mac | in Total\nsh onu info\nsh ip route\nsh ip bgp summary",
+        // 목록에 없는 장비를 선택했을 때 기본으로 보여줄 명령어
+        "default": "show running-config\nshow version\nshow ip interface brief\nshow environment all\nshow inventory"
+    };
+
+    // 1. 공통 추출기 및 아이템을 밖으로 빼냅니다.
+    const COMMON_CHECK_ITEMS = [
+        "CPU상태", "온도상태", "FAN상태", "CONFIG비교", "ARP상태", 
+        "IGMP Table", "MAC Table", "ONU Active Count", "IP라우팅", 
+        "BGP상태", "제어부 이중화"
+    ];
+
+    const HFRCpu1 = (log) => {
+        const match = log.match(/Cpu Utilization\s+:\s+([\d.]+)/i);
+        return match ? match[1] : "0";
+    };
+
+    const HFRCpu2 = (log) => {
+        if (!log) return "데이터 없음";                
+        const cpuMatch = log.match(/CpuUtilization\s*:\s*([0-9.]+)\s*%/i);        
+        if (cpuMatch) {
+            const usage = parseFloat(cpuMatch[1]); // 추출한 값을 숫자로 변환
+            return `${usage}`;
+        }
+        return "데이터 없음";
+    };
+
+    const DSCpu1 = (log) => {
+        if (!log) return "데이터 없음";
+        // '5 sec:  11.03( 0.50) %' 패턴에서 괄호 앞의 메인 수치(11.03)만 추출
+        const cpuMatch = log.match(/5\s+sec:\s*([\d.]+)/i);
+    
+        if (cpuMatch) {
+            const cpuLoad = cpuMatch[1];
+            return cpuLoad; // 필요에 따라 `${cpuLoad}%` 로 수정하여 사용 가능합니다.
+        }
+        return "데이터 없음";
+    };
+
+    const HFRTemp1 = (log) => {
+        const match = log.match(/Temperature\s+:\s+([\d]+)/i);
+        return match ? match[1] : "0";
+    };
+
+    const DSTemp1 = (log) => {
+        if (!log) return "데이터 없음";
+
+        const activeTempMatch = log.match(/Temperature\s+\d+\s*:\s*(\d+)\s*C\s*\(ACTIVE\)/i);
+        if (activeTempMatch) {
+            return `${activeTempMatch[1]}`; // 결과: "47 C"
+        }
+        const fallbackMatch = log.match(/Temperature\s+\d+\s*:\s*(\d+)\s*C/i);
+        if (fallbackMatch) {
+            return `${fallbackMatch[1]} C`;
+        }
+        return "데이터 없음";
+    };
+
+    const DSTemp2 = (log) => {
+        if (!log) return "데이터 없음";
+    
+        // 'Temperature 01 current :  49 C' 패턴에서 콜론(:) 뒤의 숫자(49)만 추출
+        const tempMatch = log.match(/Temperature\s+\d+\s+current\s*:\s*(-?\d+)\s*C/i);
+        
+        if (tempMatch) {
+            return `${tempMatch[1]}`;
+    }
+    
+    return "데이터 없음";
+    };
+
+    const HFRFan1 = (log) => {
+        if (!log) return "데이터 없음";
+        const fanLines = log.match(/FAU\s+#\d+\s+:\s+O\s+\|.*?$/gm);
+        if (!fanLines) return "데이터 없음";
+        let errors = [];
+        fanLines.forEach(line => {
+            const parts = line.split('|').map(p => p.trim());
+            const fauName = parts[0].split(':')[0].trim();
+            if (parts[3] !== "Normal") errors.push(`${fauName}-Fan1(${parts[3]})`);
+            if (parts[5] !== "Normal") errors.push(`${fauName}-Fan2(${parts[5]})`);
+        });
+        return errors.length === 0 ? "정상" : "불량: " + errors.join(", ");        
+    };
+
+    const HFRFan2 = (log) => {
+        if (!log) return "데이터 없음";
+        const lines = log.split('\n');
+        let errors = [];
+        let fanFound = false;
+
+        lines.forEach(line => {
+            // [유형 3] FAN TrayX Status : FAN 1: Good, FAN 2: Good 형태 (새로 추가)
+            if (line.includes('FAN Tray') && line.includes('Status :')) {
+                fanFound = true;
+                const parts = line.split('Status :');
+                const trayName = parts[0].trim(); // "FAN Tray1"
+                const statusStr = parts[1].trim(); // "FAN 1: Good, FAN 2: Good" 또는 "Empty"
+
+                // Empty(미장착)가 아닌 경우에만 상태 검사
+
+                if (statusStr.toLowerCase() !== 'empty') {
+                    const fanParts = statusStr.split(',');
+                    fanParts.forEach(fan => {
+                        const fanDetail = fan.split(':');
+                        if (fanDetail.length >= 2) {
+                            const fanId = fanDetail[0].trim(); // "FAN 1"
+                            const fanState = fanDetail[1].trim(); // "Good"
+                        
+                            // Good 이나 Normal 이 아니면 불량으로 간주
+                            if (fanState.toLowerCase() !== 'good' && fanState.toLowerCase() !== 'normal') {
+                                errors.push(`${trayName}-${fanId}(${fanState})`);
+                            }
+                        }
+                    });
+                }
+            }
+                // [유형 1 & 2] 기존 'FAU' 와 '|' 기호가 포함된 형태
+            else if (line.includes('FAU') && line.includes('|')) {
+                fanFound = true;
+                const parts = line.split('|').map(p => p.trim());
+                
+                // [유형 2] FAN/FAU #1/1 : O | 0 | 100% | Normal
+                if (line.includes('FAN/FAU') && line.includes(':')) {
+                    const fauName = parts[0].split(':')[0].trim(); 
+                    const status = parts[3]; 
+                    
+                    if (status && status.toLowerCase() !== "normal" && status.toLowerCase() !== "good") {
+                        errors.push(`${fauName}(${status})`);
+                    }
+                } 
+                    // [유형 1] FAU 1 | Installed | Normal | Normal | Low |
+                else if (parts.length >= 4) { 
+                    const fauName = parts[0].trim();
+                
+                    if (parts[2] && parts[2].toLowerCase() !== "normal" && parts[2].toLowerCase() !== "good") {
+                        errors.push(`${fauName}-Fan1(${parts[2]})`);
+                    }
+                    if (parts[3] && parts[3].toLowerCase() !== "normal" && parts[3].toLowerCase() !== "good") {
+                        errors.push(`${fauName}-Fan2(${parts[3]})`);
+                    }
+                }
+            }
+        });
+
+        if (!fanFound) return "데이터 없음 (FAN 정보 인식 불가)";
+        return errors.length === 0 ? "정상" : "불량: " + errors.join(", ");
+    };
+
+    const HFRFan3 = (log) => {
+        if (!log) return "데이터 없음";
+        const fanLineMatch = log.match(/FAN Status\s*:\s*(.+)/i);
+        if (!fanLineMatch) return "데이터 없음";
+        const fanStatusString = fanLineMatch[1]; 
+        const fanRegex = /FAN\s+(\d+)\s*:\s*([^,\n]+)/gi;
+        let match;
+        const badFans = [];
+        let hasFanData = false;
+    
+        while ((match = fanRegex.exec(fanStatusString)) !== null) {
+            hasFanData = true;
+            const fanNumber = match[1];        // 팬 번호 (예: "1", "2")
+            const status = match[2].trim();    // 상태 (예: "Good", "Fail")
+    
+            if (status.toLowerCase() !== "good") {
+                badFans.push(`FAN ${fanNumber}`);
+            }
+        }
+    
+        if (!hasFanData) return "데이터 없음";
+    
+        if (badFans.length > 0) {
+            return `${badFans.join(', ')} 불량`; // 예: "FAN 1 불량" 또는 "FAN 1, FAN 2 불량"
+        }
+        return "정상";
+    };
+
+    const DSFan1 = (log) => {
+        if (!log) return "데이터 없음";
+        // match[1] = "A-1" (팬 번호), match[2] = "RUN" (상태)
+        const fanRegex = /Fan\s+([A-Z0-9-]+)\s+is\s+([A-Z]+)/gi;
+        let match;
+        const badFans = [];
+        let hasFanData = false;
+        // 로그 전체에서 FAN 상태 문자열을 하나씩 순회하며 검사
+        while ((match = fanRegex.exec(log)) !== null) {
+            hasFanData = true;
+            const fanNumber = match[1];             // 예: "A-1"
+            const status = match[2].toUpperCase();  // 예: "RUN", "STOP", "FAIL" 등
+            // 상태가 "RUN"이 아니면 불량 리스트에 추가
+            if (status !== "RUN") {
+                badFans.push(`Fan ${fanNumber}`);
+            }
+        }
+        // 추출된 FAN 데이터가 전혀 없다면
+        if (!hasFanData) return "데이터 없음";
+        // 불량인 팬이 하나라도 있다면 불량 목록 출력 (예: "Fan A-1, Fan A-2 불량")
+        if (badFans.length > 0) {
+            return `${badFans.join(', ')} 불량`; 
+        }
+        // 모두 "RUN" 상태라면 정상
+        return "정상";
+    };
+
+    const DSFan2 = (log) => {
+        if (!log) return "데이터 없음";
+    
+        // 'Fan operation   : ON' 패턴에서 상태 값(ON, OFF, FAIL 등)을 추출
+        const fanRegex = /Fan operation\s*:\s*([a-zA-Z]+)/gi;
+        
+        let match;
+        let isNormal = true;
+        let fanFound = false;
+        const statusList = [];
+    
+        // 로그 내에 있는 모든 Fan operation 상태를 순회하며 확인
+        while ((match = fanRegex.exec(log)) !== null) {
+            fanFound = true;
+            const status = match[1].toUpperCase(); // 대문자로 변환하여 통일 (예: 'ON')
+            statusList.push(status);
+            // 상태가 'ON'이 아니라면 비정상으로 간주
+            if (status !== "ON") {
+                isNormal = false;
+            }
+        }
+        if (!fanFound) return "데이터 없음";
+        // 모든 팬 모듈이 ON 상태라면 '정상' 반환
+        if (isNormal) {
+            return "정상";
+        } 
+        // 하나라도 ON이 아니라면 비정상 처리 후 현재 상태들을 모두 보여줌
+        return `비정상`;
+    };
+
+    const DSFan3 = (log) => {
+         if (!log) return "데이터 없음";
+    
+        // 'Fan A-1 status is RUN' 패턴에서 팬 이름(A-1)과 상태(RUN)를 각각 추출
+        const fanRegex = /Fan\s+([^\s]+)\s+status\s+is\s+([a-zA-Z]+)/gi;
+        
+        let match;
+        let isNormal = true;
+        let fanFound = false;
+        const abnormalFans = [];
+    
+        // 로그 내에 있는 모든 개별 팬 상태를 순회하며 확인
+        while ((match = fanRegex.exec(log)) !== null) {
+            fanFound = true;
+            const fanName = match[1];                  // 팬 이름 (예: 'A-1')
+            const status = match[2].toUpperCase();     // 상태 값 (예: 'RUN')
+    
+            // 상태가 'RUN'이 아니라면 비정상으로 간주하고 해당 팬의 정보를 저장
+            if (status !== "RUN") {
+                isNormal = false;
+                abnormalFans.push(`${fanName}(${status})`);
+            }
+        }
+    
+        if (!fanFound) return "데이터 없음";
+    
+        // 모든 팬 모듈이 RUN 상태라면 '정상' 반환
+        if (isNormal) {
+            return "정상";
+        } 
+        
+        // 하나라도 RUN이 아니라면 비정상 처리 후, 어떤 팬이 문제인지 출력
+        return `비정상`;
+    };
+
+
+    const HFRConfig1 = (log) => {
+        const preLogElement = document.getElementById('logBefore');
+        const postLogElement = document.getElementById('logAfter');
+        const beforeLog = preLogElement ? preLogElement.value.trim() : "";
+        const afterLog = postLogElement ? postLogElement.value.trim() : "";
+        
+        const extractConfigText = (text) => {
+            if (!text) return null;
+            // 1. 'sh run' (또는 show run)이 있는지 확인
+            const runMatch = text.match(/sh(?:ow)?\s+run[^\n]*(?:\n|$)([\s\S]*?)(?:\nend\b|$)/i);
+            if (runMatch) {
+                return runMatch[1].replace(/\r/g, '').replace(/[ \t]+$/gm, '').trim();
+            }
+            return null; 
+        };
+        
+        const preConfig = extractConfigText(beforeLog);
+        const postConfig = extractConfigText(afterLog);
+    
+        // 값 비교 로직
+        if (preConfig === null && postConfig === null) {
+            return "데이터 없음";
+        } else if (preConfig === null) {
+            return "작업전 sh run 누락";
+        } else if (postConfig === null) {
+            return "작업후 sh run 누락";
+        } else if (preConfig === postConfig) {
+            return "정상";
+        } else {
+            return "비정상 (확인필요)";
+        }
+    };
+
+    const HFRArp1 = (log) => {
+        const match = log.match(/Total\s+number\s+of\s+entries\s*:\s*(\d+)/i);
+        return match ? match[1] : "0";
+    };
+
+    const HFRArp2 = (log) => {
+        if (!log) return "데이터 없음";
+        // 'Total [1182] entries' 형태에서 대괄호 안의 숫자 추출
+        const arpMatch = log.match(/Total\s*\[(\d+)\]/i);
+            
+        if (arpMatch) {
+            const count = arpMatch[1];
+            return `${Number(count).toLocaleString()}`;
+        }
+        return "데이터 없음";
+    };
+
+    const DSArp1 = (log) => {
+        if (!log) return "데이터 없음";
+    
+        // ARP 항목의 고유 패턴: 'IP주소 + 공백 + MAC주소'를 찾습니다.
+        // (예: 1.251.24.238    18:5a:e8:01:38:37)
+        const arpRegex = /(?:\d{1,3}\.){3}\d{1,3}\s+(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/g;
+        
+        // 로그 전체에서 위 패턴과 일치하는 모든 항목을 배열로 추출
+        const matches = log.match(arpRegex);
+        
+        // 일치하는 항목이 있다면 그 배열의 길이(length)가 곧 전체 ARP 개수
+        if (matches) {
+            return `${matches.length}`;
+        }
+        
+        return "데이터 없음";
+    };
+
+    const DSArp2 = (log) => {
+        if (!log) return "데이터 없음";
+        // 'Total arp count: 588' 패턴에서 숫자만 추출 (대소문자 무시)
+        const arpMatch = log.match(/Total arp count\s*:\s*(\d+)/i);
+        if (arpMatch) {
+            return arpMatch[1];
+        }
+        return "데이터 없음";
+    };
+
+    const HFRIgmp1 = (log) => {
+        const match = log.match(/Total\s+Group\s*:\s*(\d+)/i);
+        return match ? match[1] : "0";
+    };
+
+    const HFRIgmp2 = (log) => {
+        if (!log) return "데이터 없음";
+
+        // 'TOTAL 102' 형태에서 숫자 추출
+        const igmpMatch = log.match(/TOTAL\s+(\d+)/);
+            
+        if (igmpMatch) {
+            const count = igmpMatch[1];
+            return `${count}`;
+        }
+        return "0";
+    };
+
+    const DSIgmp1 = (log) => {
+        if (!log) return "데이터 없음";
+        // 'Total : 92' 패턴에서 콜론(:) 뒤의 숫자만 추출
+        // (이전처럼 다른 소문자 total 등과 겹치지 않도록 'Total\s*:\s*' 형태를 명확히 지정)
+        const igmpMatch = log.match(/Total\s*:\s*(\d+)/);
+        if (igmpMatch) {
+            return `${igmpMatch[1]}`; // 결과: "92"
+        }
+        return "데이터 없음";
+    };
+
+    const HFRMac1 = (log) => {
+        const match = log.match(/Total\s+\d+\s+\d+\s+(\d+)/i);
+        return match ? match[1] : "0";
+    };
+
+    const HFRMac2 = (log) => {
+        if (!log) return "데이터 없음";
+
+        // 'Total count : 1261' 형태에서 숫자 추출
+        const macMatch = log.match(/Total count\s*:\s*(\d+)/i);
+        
+        if (macMatch) {
+            const count = macMatch[1];
+            // 숫자에 콤마(,)를 넣어 가독성 있게 출력 (예: 1,261개)
+            return `${Number(count).toLocaleString()}`;
+        }
+        return "데이터 없음";
+    };
+
+    const DSMac1 = (log) => {
+        if (!log) return "데이터 없음";
+        // 'Total number of entries : 185' 패턴에서 숫자만 추출
+        const macMatch = log.match(/Total number of entries\s*:\s*(\d+)/i);
+        if (macMatch) {
+            return `${macMatch[1]}`; // 결과: "185"
+        }
+        return "데이터 없음";
+    };
+
+    const DSMac2 = (log) => {
+        if (!log) return "데이터 없음";
+        // 'Total mac count: 637' 패턴에서 숫자만 추출 (대소문자 무시)
+        const macMatch = log.match(/Total mac count\s*:\s*(\d+)/i);
+        if (macMatch) {
+            return macMatch[1]; // 결과: "637"
+        }
+        return "데이터 없음";
+    };
+
+    const DSMac3 = (log) => {
+        if (!log) return "데이터 없음";
+    
+        // MAC 주소 형태 (xx:xx:xx:xx:xx:xx)를 정확히 찾아내는 정규식
+        const macRegex = /([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/g;
+        
+        // 로그 전체에서 MAC 주소 패턴과 일치하는 모든 결과를 배열로 추출
+        const matches = log.match(macRegex);
+        
+        // 매칭된 결과가 있다면 배열의 길이(개수)를 반환, 없으면 0 반환
+        if (matches) {
+            return matches.length.toString();
+        }
+        return "0";
+    };
+
+    const HFROnu1 = (log) => {
+        let totalActive = 0;
+        // 'active 17,' 와 같은 패턴을 대소문자 구분 없이 모두 찾음(g 플래그)
+        const regex = /active\s+(\d+)\s*,/gi;
+        let match;
+            
+        // 일치하는 항목이 없을 때까지 반복하며 숫자 누적 합산
+        while ((match = regex.exec(log)) !== null) {
+            totalActive += parseInt(match[1], 10);
+        }            
+        return totalActive > 0 ? totalActive.toString() : "0";
+    };
+
+    const DSOnu1 = (log) => {
+        if (!log) return "데이터 없음";
+
+        // '|   Active |' 처럼 양옆에 파이프 기호가 있는 Active 문자열을 찾습니다.
+        // (대소문자 무시 i, 로그 전체 탐색 g 플래그 사용)
+        const activeRegex = /\|\s*Active\s*\|/gi;
+        
+        // 패턴과 일치하는 모든 항목을 배열로 추출
+        const matches = log.match(activeRegex);
+        
+        // 일치하는 항목이 있다면 배열의 길이(개수)를 반환
+        if (matches) {
+            return `${matches.length}`;
+        }
+        
+        // 일치하는 항목이 하나도 없으면 0을 반환
+        return "0";
+    };
+
+    const HFRRoute1 = (log) => {
+        if (!log) return "데이터 없음";
+        return /0\.0\.0\.0\/0/.test(log) ? "정상" : "비정상";
+    };
+
+    const HFRBgp1 = (log) => {
+        if (!log) return "데이터 없음";
+    
+        // 전체 등록된 Neighbor 수와 실제 연결된(Established) 세션 수 추출
+        const neighborsMatch = log.match(/Total\s+number\s+of\s+neighbors\s+(\d+)/i);
+        const establishedMatch = log.match(/Total\s+number\s+of\s+Established\s+sessions\s+(\d+)/i);
+
+        if (neighborsMatch && establishedMatch) {
+            const totalNeighbors = parseInt(neighborsMatch[1], 10);
+            const establishedSessions = parseInt(establishedMatch[1], 10);
+            
+            // 등록된 BGP가 없을 경우
+            if (totalNeighbors === 0) {
+                return "BGP 설정 없음";
+            } 
+             // 등록된 수와 연결된 수가 완벽히 일치할 때 (1개든 2개든 모두 연결됨)
+            else if (totalNeighbors === establishedSessions) {
+                return "정상";
+            } 
+             // 등록은 되어 있으나 연결이 끊어진 경우
+            else {
+                return `불량 (연결:${establishedSessions}/설정:${totalNeighbors})`;
+            }
+        }
+        return "데이터 없음";
+    };
+
+    const HFRBgp2 = (log) => {
+        if (!log) return "데이터 없음";
+        const lines = log.split('\n');
+        let bgpFound = false;
+        let hasError = false;
+
+        lines.forEach(line => {
+            const neighborMatch = line.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+\d+/);
+            if (neighborMatch) {
+                bgpFound = true;
+                const parts = line.trim().split(/\s+/);
+                const stateOrPfx = parts[parts.length - 1];
+                if (isNaN(stateOrPfx)) hasError = true; // 숫자가 아니면(문자열이면) 에러
+            }
+        });
+        if (!bgpFound) return "데이터 없음";
+        return hasError ? "확인필요" : "정상";
+    };
+
+    const DSBgp1 = (log) => {
+        if (!log) return "데이터 없음";
+    
+        // BGP neighbor 라인 추출 (IP주소로 시작해서 상태로 끝나는 줄을 찾음)
+        // 예: 100.99.114.245  4  65003  30913  30849  30846  0  0 03w0d10h  91
+        const bgpRegex = /(\d{1,3}(?:\.\d{1,3}){3})\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\S+\s+([A-Za-z]+|\d+)/g;
+        
+        let match;
+        let hasBgp = false;
+        let isNormal = true;
+        const badNeighbors = [];
+    
+        // 로그에서 BGP 네이버 정보를 하나씩 순회
+        while ((match = bgpRegex.exec(log)) !== null) {
+            hasBgp = true;
+            const neighborIp = match[1];  // 네이버 IP (예: 100.99.114.245)
+            const state = match[2];       // 상태 또는 Pfx 개수 (예: 91 또는 Idle)
+    
+            // 상태 값이 숫자가 아니면(즉 영문자이면) 비정상으로 간주
+            if (isNaN(state)) {
+                isNormal = false;
+                badNeighbors.push(`${neighborIp} (${state})`);
+            }
+        }
+    
+        if (!hasBgp) return "데이터 없음";
+    
+        // 비정상인 네이버가 하나라도 있다면 해당 IP와 상태를 출력
+        if (!isNormal) {
+            return `비정상`;
+        }
+    
+        // 모든 네이버가 숫자로 된 Prefix를 정상적으로 받고 있다면
+        return "정상";   
+    };
+
+    const HFRRedu1 = (log) => {
+        if (!log) return "데이터 없음";
+        return /Redundancy\s+state\s*:\s*FULL-Match/i.test(log) ? "정상" : "비정상";
+    };
+
+    const HFRRedu2 = (log) => {
+        if (!log) return "데이터 없음";
+        return "비대상";
+    };
+
+    const HFRRedu3 = (log) => {
+        if (!log) return "데이터 없음";
+        const isStateFull = /Redundancy\s+state\s*:\s*FULL/i.test(log);
+        const isPortMatch = /All\s+MATCH\s*!!!/i.test(log);
+        return (isStateFull && isPortMatch) ? "정상" : "비정상";
+    }; 
+    
+    const DSRedu1 = (log) => {
+        if (!log) return "데이터 없음";
+
+        // 'mode'와 'operational state' 항목을 찾아 값 추출
+        const modeMatch = log.match(/mode\s*:\s*([^\n\r]+)/i);
+        const opStateMatch = log.match(/operational state\s*:\s*([^\n\r]+)/i);
+    
+        // 둘 다 찾을 수 없다면 이중화 로그가 없는 것
+        if (!modeMatch && !opStateMatch) return "데이터 없음";
+    
+        const mode = modeMatch ? modeMatch[1].trim().toUpperCase() : "";
+        const opState = opStateMatch ? opStateMatch[1].trim().toUpperCase() : "";
+    
+        // REDUNDANT 모드이고, 동작 상태가 READY (ACTIVE_READY 또는 STANDBY_READY) 이면 정상
+        if (mode === "REDUNDANT" && opState.includes("READY")) {
+            return "정상";
+        }
+        
+        // 조건에 맞지 않으면 비정상 처리 후 현재 상태를 반환하여 문제 확인을 도움
+        return `비정상`;
+    };
+
+    const exdefault = (log, itemName) => {
+        if (!log) return "0";
+        const lines = log.split('\n');
+        const found = lines.find(l => l.includes(itemName.replace('상태','')));
+        if (found) {
+            const numMatch = found.match(/[\d.]+/);
+            return numMatch ? numMatch[0] : "비대상";
+        }
+        return "0";
+    };
+
+    function updateCheckCommands() {
+        const selectedEquip = document.getElementById("checkEquipType").value;
+        const commandArea = document.getElementById("customCommandArea");
+        
+        if (commandArea) {
+            // 정의된 장비면 해당 명령어를, 아니면 default 명령어를 불러옴
+            const newCommands = CHECK_COMMANDS_BY_EQUIP[selectedEquip] || CHECK_COMMANDS_BY_EQUIP["HL7180XG"];
+            commandArea.innerText = newCommands;
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        updateCheckCommands();
+    });
+
+    const analyzeConfig = {
+        
+        "HL7180XG": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu1,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan1,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp1,
+                "IGMP Table": HFRIgmp1,
+                "MAC Table": HFRMac1,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp1,
+                "제어부 이중화": HFRRedu1,
+                "default" : exdefault
+            }
+        },
+        
+        "HL7208XG": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu1,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan2,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp1,
+                "IGMP Table": HFRIgmp1,
+                "MAC Table": HFRMac1,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp1,
+                "제어부 이중화": HFRRedu2,
+                "default" : exdefault
+            }
+        },
+        
+        "HL7301": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu1,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan2,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp1,
+                "IGMP Table": HFRIgmp1,
+                "MAC Table": HFRMac1,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp1,
+                "제어부 이중화": HFRRedu2,
+                "default" : exdefault
+            }    
+        },
+
+        "HL7302": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu1,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan2,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp1,
+                "IGMP Table": HFRIgmp1,
+                "MAC Table": HFRMac1,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp1,
+                "제어부 이중화": HFRRedu1,
+                "default" : exdefault
+            }
+        },
+        
+         "SG7000G": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu2,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan2,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp2,
+                "IGMP Table": HFRIgmp2,
+                "MAC Table": HFRMac2,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp2,
+                "제어부 이중화": HFRRedu2,
+                "default" : exdefault
+            }
+        },
+        
+        "HL7008G": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu1,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan2,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp1,
+                "IGMP Table": HFRIgmp1,
+                "MAC Table": HFRMac1,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp1,
+                "제어부 이중화": HFRRedu2,
+                "default" : exdefault
+            }
+        },
+
+        "HT7000G": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu2,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan2,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp2,
+                "IGMP Table": HFRIgmp2,
+                "MAC Table": HFRMac2,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp2,
+                "제어부 이중화": HFRRedu3,
+                "default" : exdefault
+            }
+        },
+
+        "SGL-T040G": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": HFRCpu2,
+                "온도상태": HFRTemp1,
+                "FAN상태": HFRFan3,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": HFRArp2,
+                "IGMP Table": HFRIgmp2,
+                "MAC Table": HFRMac2,
+                "ONU Active Count": HFROnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": HFRBgp2,
+                "제어부 이중화": HFRRedu2,
+                "default" : exdefault
+            }
+        },
+
+        "V8240": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": DSCpu1,
+                "온도상태": DSTemp1,
+                "FAN상태": DSFan1,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": DSArp1,
+                "IGMP Table": DSIgmp1,
+                "MAC Table": DSMac1,
+                "ONU Active Count": DSOnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": DSBgp1,
+                "제어부 이중화": DSRedu1,
+                "default" : exdefault
+            }
+        },
+
+        "V5848G": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": DSCpu1,
+                "온도상태": DSTemp2,
+                "FAN상태": DSFan3,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": DSArp1,
+                "IGMP Table": DSIgmp1,
+                "MAC Table": DSMac3,
+                "ONU Active Count": DSOnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": DSBgp1,
+                "제어부 이중화": DSRedu1,
+                "default" : exdefault
+            }
+        },
+
+        "V5808C": {
+            items: COMMON_CHECK_ITEMS,
+            extractors: {
+                "CPU상태": DSCpu1,
+                "온도상태": DSTemp2,
+                "FAN상태": DSFan2,
+                "CONFIG비교": HFRConfig1,
+                "ARP상태": DSArp2,
+                "IGMP Table": DSIgmp1,
+                "MAC Table": DSMac2,
+                "ONU Active Count": DSOnu1,
+                "IP라우팅": HFRRoute1,
+                "BGP상태": DSBgp1,
+                "제어부 이중화": HFRRedu2,
+                "default" : exdefault
+            }
+        }
+    };
+    
+    let term, fitAddon;
+    let port, reader, writer;
+    let keepReading = true;
+
+    window.onload = () => {
+        // 1. 모델 선택 메뉴 초기화
+        updateModelList('ONU');
+    
+        // 2. 로그인 비밀번호 입력창 엔터키 감지
+        const pwInput = document.getElementById('loginPw');
+        if (pwInput) {
+            pwInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault(); // 페이지 새로고침 방지
+                    handleLogin(); // 로그인 함수 실행
+                }
+            });
+        }
+
+        // 3. 로그인 ID 입력창에서도 엔터를 치면 비번창으로 넘어가거나 로그인되게 추가 (선택사항)
+        const idInput = document.getElementById('loginId');
+        if (idInput) {
+            idInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    pwInput.focus();
+                }
+            });
+        }
+    };
+
+    async function handleLogin() {
+        const id = document.getElementById('loginId').value;
+        const pw = document.getElementById('loginPw').value;
+        
+        // 사용자가 입력한 비밀번호를 암호화
+        const hashedPw = await sha256(pw);
+        
+        // 아이디는 그대로 비교하고, 비밀번호는 암호화된 해시값끼리 비교
+        if (id === AUTH_CONFIG.id && hashedPw === AUTH_CONFIG.pwHash) { 
+            document.getElementById('login-container').style.display = 'none';
+            document.getElementById('menu-container').style.display = 'flex'; // 메뉴 화면 표시
+            document.body.style.overflow = 'auto';
+        } else {
+            alert("아이디 또는 비밀번호가 틀렸습니다.");
+        }
+    }
+
+    function handleDownload() {
+        const fileUrl = 'https://yeomdh3100.github.io/autoconfigurator/index.html';
+        const fileName = 'index.html';
+    
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.download = fileName;
+        
+        // 화면에 보이지 않게 처리 후 클릭 이벤트 발생
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        console.log("다운로드가 시작되었습니다.");
+    }
+
+    function goToCheck() {
+        document.getElementById('menu-container').style.display = 'none';
+        document.getElementById('main-app').style.display = 'none';
+        document.getElementById('diff-app-container').style.display = 'none';
+        document.getElementById('check-app-container').style.display = 'block';
+    }
+
+    function goToConfig() {
+        // 메뉴 화면을 숨기고 실제 설정 화면을 표시함
+        document.getElementById('menu-container').style.display = 'none';
+        document.getElementById('diff-app-container').style.display = 'none';
+        document.getElementById('check-app-container').style.display = 'none';
+        document.getElementById('main-app').style.display = 'flex';
+    
+        // 기존에 handleLogin에 있던 초기화 로직들을 여기서 실행
+        document.querySelectorAll('.enter-trigger').forEach(el => {
+            el.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    generateAll();
+                }
+            });
+        });
+        setTimeout(initTerminal, 50); // 터미널 초기화
+    }
+
+    function goToDiff() {
+        document.getElementById('menu-container').style.display = 'none';
+        document.getElementById('main-app').style.display = 'none';
+        document.getElementById('check-app-container').style.display = 'none';
+        
+        document.getElementById('diff-app-container').style.display = 'block';
+        
+    }
+
+    function backToMenu() {
+        document.getElementById('diff-app-container').style.display = 'none';
+        document.getElementById('main-app').style.display = 'none';
+        document.getElementById('check-app-container').style.display = 'none';
+        document.getElementById('menu-container').style.display = 'flex';
+    }
+    
+    function resetCheckApp() {
+        // 1. 장비 종류 셀렉트 박스를 첫 번째 옵션으로 초기화
+        const equipSelect = document.getElementById("checkEquipType");
+        equipSelect.selectedIndex = 0;
+        
+        // 2. 작업 전/후 로그 입력창(Textarea) 내용 비우기
+        document.getElementById("logBefore").value = "";
+        document.getElementById("logAfter").value = "";
+        
+        // 3. 점검 결과 그리드 비우기
+        const resultsGrid = document.getElementById("check-results-grid");
+        if (resultsGrid) {
+            resultsGrid.innerHTML = "";
+        }
+        
+        // 4. 변경된 장비 종류에 맞춰 명령어 박스 상태 업데이트
+        if (typeof updateCheckCommands === 'function') {
+            updateCheckCommands();
+        }
+    }
+
+    function analyzeAllLogs() {
+        const equipType = document.getElementById('checkEquipType').value;
+        const beforeLog = document.getElementById('logBefore').value;
+        const afterLog = document.getElementById('logAfter').value;
+        const grid = document.getElementById('check-results-grid');
+    
+        if (!beforeLog || !afterLog) { alert("로그를 모두 입력해 주세요."); return; }
+        grid.innerHTML = "";
+    
+        // 화면 상단의 드롭다운에서 선택한 장비에 해당하는 항목 리스트 로드
+        const checkItems = (analyzeConfig[equipType] || analyzeConfig["HL7180XG"]).items;
+    
+        checkItems.forEach((item, index) => {
+            const result = performLogic(equipType, item, beforeLog, afterLog);
+            
+            // 카드 UI 생성 로직 (이전 디자인 그대로 유지)
+            const createCard = (title, data, type) => {
+                const card = document.createElement('div');
+                const isBefore = type === 'before';
+                const themeColor = isBefore ? '#3b82f6' : '#ef4444';
+    
+                card.style.cssText = `
+                    background: white; border: 2px solid ${themeColor}; border-radius: 12px;
+                    overflow: hidden; min-height: 180px; display: flex; flex-direction: column;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.07); width: 100%;
+                `;
+    
+                card.innerHTML = `
+                    <div style="background: ${themeColor}; padding: 12px 15px; color: white; font-size: 20px; font-weight: bold; text-align: center;">
+                        ${index + 1}. ${item} [${isBefore ? '작업전' : '작업후'}]
+                    </div>
+                    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center;">
+                        <div style="font-family: 'Consolas', monospace; font-size: 28px; font-weight: 800; color: #1a202c; word-break: break-all;">
+                            ${data}
+                        </div>
+                    </div>
+                `;
+                return card;
+            };
+    
+            grid.appendChild(createCard(item, result.beforeData, 'before'));
+            grid.appendChild(createCard(item, result.afterData, 'after'));
+        });
+    }
+
+   function performLogic(equip, item, before, after) {
+        // 1. 선택된 장비의 설정을 불러옴 (없으면 ONU로 기본 폴백)
+        const config = analyzeConfig[equip] || analyzeConfig["ONU"];
+        
+        // 2. 해당 항목에 매칭되는 추출기 함수를 찾음 (없으면 default 함수 사용)
+        const extractorFunc = config.extractors[item] || config.extractors["default"];
+        
+        // 3. 작업 전/후 로그를 추출기 함수에 넣어 결과값 도출
+        const beforeData = extractorFunc(before, item);
+        const afterData = extractorFunc(after, item);
+        
+        return { beforeData, afterData };
+    }
+
+
+    function toggleTheme() {
+        const body = document.body;
+        const btn = document.getElementById('themeToggleBtn');
+        
+        // 1. 클래스 토글 (다크모드 켜고 끄기)
+        body.classList.toggle('dark-mode');
+        
+        // 2. 상태에 따라 버튼의 UI(텍스트) 변경
+        if (body.classList.contains('dark-mode')) {
+            // 다크모드일 때는 다시 밝게 바꿀 수 있도록 '라이트 모드'라고 표시
+            btn.innerText = '☀️ 라이트 모드';
+            localStorage.setItem('theme', 'dark');
+        } else {
+            // 라이트모드일 때는 다크모드로 바꿀 수 있도록 '다크 모드'라고 표시
+            btn.innerText = '🌙 다크 모드';
+            localStorage.setItem('theme', 'light');
+        }
+    }
+    
+    // [옵션] 페이지 로드 시 이전에 저장한 테마 불러오기 (DOMContentLoad 내부 등에 추가 권장)
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            document.getElementById('themeToggleBtn').innerText = '☀️ 라이트 모드';
+        }
+    });
+
+
+    // --- 텍스트 비교 로직 ---
+   function compareTexts() {
+        // 1. 입력값 가져오기
+         const text1 = document.getElementById('text1').value
+        .split('\n')
+        .map(line => line.trimEnd()) // 각 줄의 오른쪽 공백 제거
+        .join('\n');
+       
+        const text2 = document.getElementById('text2').value
+        .split('\n')
+        .map(line => line.trimEnd()) // 각 줄의 오른쪽 공백 제거
+        .join('\n');
+       
+        const resultContainer = document.getElementById('diff-result');
+
+        // 데이터가 없을 때 처리
+        if (!text1 && !text2) {
+            resultContainer.innerHTML = '<div style="padding: 60px; text-align:center; color: #94a3b8; font-size: 14px;">데이터를 먼저 입력해 주세요.</div>';
+            return;
+        }
+
+
+        // 2. jsdiff를 이용한 분석
+    	const diffLines = Diff.diffLines(text1, text2);
+        const rows = [];
+
+        for (let i = 0; i < diffLines.length; i++) {
+            let part = diffLines[i];
+            let lines = part.value.replace(/\n$/, '').split('\n');
+            
+            if (part.removed && i + 1 < diffLines.length && diffLines[i + 1].added) {
+                let addedPart = diffLines[i + 1];
+                let addedLines = addedPart.value.replace(/\n$/, '').split('\n');
+                let maxLines = Math.max(lines.length, addedLines.length);
+
+                for (let j = 0; j < maxLines; j++) {
+                    rows.push({
+                        left: lines[j] !== undefined ? lines[j] : null,
+                        right: addedLines[j] !== undefined ? addedLines[j] : null,
+                        type: 'modified'
+                    });
+                }
+                i++; 
+            } 
+            else if (part.removed) {
+                lines.forEach(l => rows.push({ left: l, right: null, type: 'removed' }));
+            } 
+            else if (part.added) {
+                lines.forEach(l => rows.push({ left: null, right: l, type: 'added' }));
+            } 
+            else {
+                lines.forEach(l => rows.push({ left: l, right: l, type: 'unchanged' }));
+            }
+        }
+
+        let resultHtml = '';
+
+        // 3. 결과 화면 생성 
+        rows.forEach(row => {
+            let leftContent = row.left !== null ? escapeHtml(row.left) : '';
+            let rightContent = row.right !== null ? escapeHtml(row.right) : '';
+            let leftClass = '';
+            let rightClass = '';
+
+            if (row.type === 'unchanged') {
+                 // 변경 없음
+            } 
+            else if (row.type === 'added') {
+                leftClass = 'empty-line';
+                rightClass = 'bg-yellow'; 
+            } 
+            else if (row.type === 'removed') {
+                leftClass = 'bg-red';     
+                rightClass = 'empty-line';
+            } 
+            else if (row.type === 'modified') {
+                leftClass = 'bg-red';     
+                rightClass = 'bg-yellow'; 
+                if (row.left === null) leftClass = 'empty-line';
+                if (row.right === null) rightClass = 'empty-line';
+            }
+
+            resultHtml += `
+                <div class="diff-row">
+                    <div class="diff-cell left ${leftClass}">${leftContent}</div>
+                    <div class="diff-cell right ${rightClass}">${rightContent}</div>
+                </div>
+            `;
+        });
+
+        resultContainer.innerHTML = resultHtml;
+    }
+
+        // --- 텍스트 비교 초기화 함수 ---
+    function resetDiff() {
+        // 1. 입력창(textarea) 초기화
+        document.getElementById('text1').value = '';
+        document.getElementById('text2').value = '';
+        
+        // 2. 결과 출력창 초기화 (처음 안내 문구로 되돌림)
+        const resultContainer = document.getElementById('diff-result');
+        resultContainer.innerHTML = '<div style="padding: 50px; text-align: center; color: var(--text-sub);">텍스트를 입력하고 비교 버튼을 눌러주세요.</div>';
+        
+        // 3. (선택사항) 첫 번째 입력창에 포커스
+        document.getElementById('text1').focus();
+    }
+
+    function escapeHtml(unsafe) {
+        return (unsafe || '')
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+     }
+    
+    function initTerminal() {
+        if (term) return;
+
+        term = new Terminal({
+            cursorBlink: true,
+            fontSize: 13,
+            fontFamily: 'Courier New, monospace',
+            theme: { background: '#000000', foreground: '#00FF00' }
+        });
+
+        if (window.FitAddon) {
+            fitAddon = new window.FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+        }
+
+        term.open(document.getElementById('terminal-container'));
+
+        // 핵심: 터미널이 부모 크기를 인식할 수 있도록 시간을 줌
+        setTimeout(() => {
+            if (fitAddon && typeof fitAddon.fit === 'function') {
+                fitAddon.fit();
+                term.writeln("\x1b[1;33m[시스템]\x1b[0m Connect 버튼을 눌러 장비에 연결하세요.");
+            }
+        }, 200);
+
+        window.addEventListener('resize', () => {
+            if (fitAddon) fitAddon.fit();
+        });
+
+        // 삭제한 위치에 아래 내용을 붙여넣으세요.
+        let isSending = false; // 전송 상태 플래그
+        let currentAbortController = null; // 중단을 위한 컨트롤러 추가
+
+        term.onData(async (data) => {
+            if (!writer) return;
+            
+            // [추가] Ctrl+C 입력 감지 (ASCII 값 3)
+            if (data === '\x03') {
+                if (isSending && currentAbortController) {
+                    currentAbortController.abort(); // 전송 루프 중단 신호
+                    term.write("\r\n\x1b[1;31m[중단됨] 사용자에 의해 전송이 중지되었습니다.\x1b[0m\r\n");
+                    return;
+                }
+                // 전송 중이 아닐 때는 일반적인 Ctrl+C 명령을 장비로 보냄
+                writer.write(new TextEncoder().encode(data));
+                return;
+            }
+            
+            // 1. 일반적인 키보드 입력 (1글자)은 지연 없이 즉시 전송
+            if (data.length <= 1) {
+                writer.write(new TextEncoder().encode(data));
+            } 
+            // 2. 복사/붙여넣기 등 대량 데이터는 지연 전송 실행
+            else {
+                if (isSending) return; // 중복 전송 방지
+                isSending = true;
+                currentAbortController = new AbortController(); // 새 컨트롤러 생성
+
+                try {
+                    await sendWithDelay(data, 30, currentAbortController.signal); // 전송속도 설정
+                    
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        console.log("전송 중단됨");
+                    } else {
+                        console.error("전송 오류:", err);
+                    }
+                } finally {
+                    isSending = false;
+                    currentAbortController = null;
+                }
+            }
+        });
+    }
+
+
+
+     function updateModelList(type) {
+        const select = document.getElementById('deviceSelect');
+        select.innerHTML = ''; // 셀렉트 박스 안의 기존 목록을 싹 비웁니다.
+        
+        // MODEL_GROUPS에서 해당 타입의 장비 목록을 가져옵니다.
+        const models = MODEL_GROUPS[type] || Object.keys(CONFIG_MODELS);
+        
+        models.forEach(m => {
+            if (CONFIG_MODELS[m]) { // 설정에 존재하는 모델만 목록에 추가
+                const opt = document.createElement('option');
+                opt.value = m; 
+                opt.innerText = m;
+                select.appendChild(opt);
+            }
+        });
+        
+        updateDefaultData();
+    }
+
+    function updateDefaultData() {
+        const model = document.getElementById('deviceSelect').value;
+        const data = CONFIG_MODELS[model];
+        ['consoleInput', 'versionInput', 'baseId', 'basePw'].forEach((id, idx) => {
+            document.getElementById(id).value = Object.values(data)[idx];
+        });
+    }
+
+    function setEquipType(type, btn) {
+        document.getElementById('selectedEquipType').value = type;
+        
+        // 클릭된 버튼만 파란색(active)으로 변경
+        btn.parentElement.querySelectorAll('.vlan-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // AGW일 때만 VLAN을 숨기고 Domain을 표시
+        if (type === 'AGW') {
+            document.getElementById('vlan-section').style.display = 'none';
+            document.getElementById('domain-section').style.display = 'block';
+        } else {
+            document.getElementById('vlan-section').style.display = 'block';
+            document.getElementById('domain-section').style.display = 'none';
+        }
+        updateModelList(type);
+    }
+    
+    function setVlan(val, btn) {
+        document.getElementById('selectedVlan').value = val;
+        
+        btn.parentElement.querySelectorAll('.vlan-btn').forEach(b => b.classList.remove('active'));  
+        btn.classList.add('active');
+    }
+
+    function cleanTemplate(str) {
+        return str.trim().replace(/\n\s+/g, '\n');
+    }
+
+
+   
+    
+    function generateAll() {
+        const model = document.getElementById('deviceSelect').value;
+        const host = document.getElementById('hostInput').value.trim();
+        const ipFull = document.getElementById('ipInput').value.trim();
+        const vlan = document.getElementById('selectedVlan').value;
+        const id = document.getElementById('baseId').value;
+        const pw = document.getElementById('basePw').value;
+        const domain = document.getElementById('domainInput').value;
+
+        try {
+            if (!host) throw "Hostname을 입력해주세요.";
+            if (!ipFull.includes('/')) throw "IP/Subnet 형식을 확인해주세요.";
+
+            const [ip, subStr] = ipFull.split('/');
+            const sub = Number(subStr);
+            if (isNaN(sub) || sub < 24 || sub > 30) throw "서브넷 범위(24~30) 오류!";
+
+            const hops = ip.split('.');
+            if (hops.length !== 4) throw "올바른 IP 형식이 아닙니다.";
+            hops.forEach((h, i) => {
+                const num = Number(h);
+                if (h === "" || isNaN(num) || num < 0 || num > 255) throw `${i+1}번째 IP 범위(0~255) 오류!`;
+            });
+
+            // Gateway 계산
+            let ipNum = (Number(hops[0]) << 24 | Number(hops[1]) << 16 | Number(hops[2]) << 8 | Number(hops[3])) >>> 0;
+            let gwNum = (ipNum & (0xFFFFFFFF << (32 - sub))) + 1;
+            let gw = [(gwNum >>> 24) & 0xFF, (gwNum >>> 16) & 0xFF, (gwNum >>> 8) & 0xFF, gwNum & 0xFF].join('.');
+
+            // [추가] 모델별 VLAN 700 전용 설정 템플릿
+            const vlan700config = {
+                "H5224G": `
+                           !
+                           vlan 200
+                           no untagged 1-24
+                           exit
+                           !
+                           vlan 700
+                           untagged 1-24
+                           exit
+                           `,
+                "H5216G": `
+                           !
+                           vlan 200
+                           no untagged 1-16
+                           exit
+                           !
+                           vlan 700
+                           untagged 1-16
+                           exit
+                           `,
+                "H5208G": `
+                           !
+                           vlan 200
+                           no untagged 1-8
+                           exit
+                           !
+                           vlan 700
+                           untagged 1-8
+                           exit
+                           `,
+                "DSW1324G":  `
+                            switchport access vlan 700
+                            `,
+                "V2224GB":  `
+                            vlan del br200 1-24
+                            vlan add br700 1-24 untagged
+                              `,
+                "V2924GB":  `
+                            vlan del br200 1-24
+                            vlan add br700 1-24 untagged
+                            `,
+                "V2916GB":  `
+                           vlan del br200 1-16
+                           vlan add br700 1-16 untagged
+                            `,
+                "V2808M":  `
+                           vlan del br200 1-8
+                           vlan add br700 1-8 untagged
+                            `,
+                "HN5324XG":  `
+                            switchport access vlan 700
+                            `,
+                "HN5424XG":  `
+                            switchport access vlan 700 1/1-1/24
+                            `,
+                "GNT3510":  `
+                            !
+                            vlan 200
+                            no untagged 1-8
+                            exit
+                            !
+                            vlan 700
+                            untagged 1-8
+                            exit
+                            `,
+                "GNT3520":  `
+                            vlan 200
+                            no untagged ge1-ge8
+                            exit
+                            vlan 700
+                            untagged ge1-ge8
+                            exit
+                            `,
+                "V5924C":  `
+                            업데이트 중 입니다.
+                            `,
+                "V5924O":  `
+                            업데이트 중 입니다.
+                            `,
+                "EX-5124B PLUS":  `
+                            업데이트 중 입니다.
+                            `,
+                "VNET 2324K":  `
+                            업데이트 중 입니다.
+                            `
+                // 다른 모델도 여기에 추가 가능
+            };
+
+            const templates = {
+                restore: {
+                    "H5224G":  `
+                                write default l2-sampleconfig gpon
+                                y
+                                reload
+                                n
+                                y
+                                `,
+                    "H5216G":  `
+                                write default l2-sampleconfig gpon
+                                y
+                                reload
+                                n
+                                y
+                                `,
+                    "H5208G":  `
+                                write default l2-sampleconfig gpon
+                                y
+                                reload
+                                n
+                                y
+                                `,
+                    "DSW1324G":  `
+                                write config gpm gem2
+                                !
+                                reload
+                                n
+                                y
+                                `,
+                    "V2224GB":  `
+                                restore uplink-giga-25-30-tagged
+                                !
+                                reload
+                                n
+                                y
+                                `,
+                    "V2924GB":  `
+                                restore uplink-giga-25-30-tagged-gpon
+                                !
+                                reload
+                                n
+                                y
+                                `,
+                    "V2916GB":  `
+                                restore uplink-giga-17-18-tagged-gpon
+                                !
+                                reload
+                                n
+                                y
+                                `,
+                    "V2808M":  `
+                                restore uplink-giga-9-10-tagged
+                                !
+                                reload
+                                n
+                                y
+                                `,
+                    "HN5324XG": `
+                                write l2-sampleconfig gpon
+                               y
+                               reload
+                               y
+                               n
+                                `,
+                    "HN5424XG": `
+                               restore skb-default
+                               !
+                               reload
+                               n
+                               y
+                                `,
+                    "GNT3510":  `
+                               write default l2-sampleconfig gpon
+                               y
+                               reload
+                               n
+                               y
+                                `,
+                    "GNT3520":  `
+                               copy skb-default.conf startup-config
+                               !
+                               reload
+                               n
+                               y
+                                `,
+                    "V5924C":  `
+                                업데이트 중 입니다.
+                                `,
+                    "V5924O":  `
+                                업데이트 중 입니다.
+                                `,
+                    "EX-5124B PLUS":  `
+                                업데이트 중 입니다.
+                                `,
+                    "VNET 2324K":  `
+                                업데이트 중 입니다.
+                                `,
+                    "KMG-32B":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `,
+                    "KMG-32E":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `,
+                    "DV-232A":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `,
+                    "DV-432A":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `
+                },
+                config: {
+                    "H5224G":  `
+                                conf t
+                                hostname ${host}
+                                !
+                                storm-control set 1-24 b rate 20
+                                storm-control set 1-24 uu rate 5
+                                storm-control set 25-26 uu rate 30
+                                storm-control set 1-24 um rate 15
+                                !
+                                ntp interval 1440
+                                vlan 160
+                                ip address ${ip}/${sub}
+                                exit
+                                ${vlan === '700' ? vlan700config["H5224G"] : ''}
+                                !
+                                system management-address ${ip}
+                                !
+                                port 1-24
+                                enable
+                                exit
+                                !
+                                dhcp option relay-agent-info policy append port 25-28
+                                !
+                                rule ntp acl ingress all-port
+                                rule ntp acl sip 124.111.69.44 255.255.255.255
+                                rule ntp acl l4-protocol udp
+                                rule ntp acl l4-src-port 123
+                                rule ntp action permit
+                                rule ntp apply
+                                !
+                                rule ntp-1 acl ingress all-port
+                                rule ntp-1 acl sip 124.111.69.45 255.255.255.255
+                                rule ntp-1 acl l4-protocol udp
+                                rule ntp-1 acl l4-src-port 123
+                                rule ntp-1 action permit
+                                rule ntp-1 apply
+                                !
+                                rule ntp-2 acl ingress all-port
+                                rule ntp-2 acl dip ${ip} 255.255.255.255
+                                rule ntp-2 acl l4-protocol udp
+                                rule ntp-2 acl l4-dst-port 123
+                                rule ntp-2 action drop
+                                rule ntp-2 apply
+                                !
+                                snmp trap-source-ip ${ip}
+                                !
+                                ip route default ${gw}
+                                !
+                                syslog forward 118.217.79.155 info
+                                syslog forward 1.255.90.53 info
+                                syslog forward source-ip ${ip}
+                                !
+                                gpon monitor timeout 60 retry-count 5 lock-count 10
+                                !
+                                qos queue queue-id 0 drop-threshold low 1470 high 1500 
+                                !
+                                gateway-monitor
+                                gateway-address enable
+                                ping-interval 120
+                                reboot-on 5 failures
+                                lock-on 3 reboots
+                                lock-duration 60 minutes
+                                end
+                                !
+                                wr m
+                                `,
+                    "H5216G":  `
+                                conf t
+                                hostname ${host}
+                                !
+                                storm-control set 1-16 b rate 20
+                                storm-control set 1-16 uu rate 5
+                                storm-control set 17-18 uu rate 30
+                                storm-control set 1-16 um rate 15
+                                !
+                                ntp interval 1440
+                                vlan 160
+                                ip address ${ip}/${sub}
+                                exit
+                                ${vlan === '700' ? vlan700config["H5216G"] : ''}
+                                !
+                                system management-address ${ip}
+                                !
+                                port 1-16
+                                enable
+                                exit
+                                !
+                                dhcp option relay-agent-info policy append port 17-18
+                                !
+                                rule ntp acl ingress all-port
+                                rule ntp acl sip 124.111.69.44 255.255.255.255
+                                rule ntp acl l4-protocol udp
+                                rule ntp acl l4-src-port 123
+                                rule ntp action permit
+                                rule ntp apply
+                                !
+                                rule ntp-1 acl ingress all-port
+                                rule ntp-1 acl sip 124.111.69.45 255.255.255.255
+                                rule ntp-1 acl l4-protocol udp
+                                rule ntp-1 acl l4-src-port 123
+                                rule ntp-1 action permit
+                                rule ntp-1 apply
+                                !
+                                rule ntp-2 acl ingress all-port
+                                rule ntp-2 acl dip ${ip} 255.255.255.255
+                                rule ntp-2 acl l4-protocol udp
+                                rule ntp-2 acl l4-dst-port 123
+                                rule ntp-2 action drop
+                                rule ntp-2 apply
+                                !
+                                snmp trap-source-ip ${ip}
+                                !
+                                ip route default ${gw}
+                                !
+                                syslog forward 118.217.79.155 info
+                                syslog forward 1.255.90.53 info
+                                syslog forward source-ip ${ip}
+                                !
+                                gpon monitor timeout 60 retry-count 5 lock-count 10
+                                !
+                                qos queue queue-id 0 drop-threshold low 1470 high 1500
+                                !
+                                gateway-monitor
+                                gateway-address enable
+                                ping-interval 120
+                                reboot-on 5 failures
+                                lock-on 3 reboots
+                                lock-duration 60 minutes
+                                end
+                                !
+                                wr m
+                                `,
+                    "H5208G":  `
+                                conf t
+                                hostname ${host}
+                                !
+                                storm-control set 1-8 b rate 20
+                                storm-control set 1-8 uu rate 5
+                                storm-control set 9-10 uu rate 30
+                                storm-control set 1-8 um rate 15
+                                !
+                                ntp interval 1440
+                                vlan 160
+                                ip address ${ip}/${sub}
+                                exit
+                                ${vlan === '700' ? vlan700config["H5208G"] : ''}
+                                !
+                                system management-address ${ip}
+                                !
+                                port 1-8
+                                enable
+                                exit
+                                !
+                                dhcp option relay-agent-info policy append port 9-10
+                                !
+                                rule ntp acl ingress all-port
+                                rule ntp acl sip 124.111.69.44 255.255.255.255
+                                rule ntp acl l4-protocol udp
+                                rule ntp acl l4-src-port 123
+                                rule ntp action permit
+                                rule ntp apply
+                                !
+                                rule ntp-1 acl ingress all-port
+                                rule ntp-1 acl sip 124.111.69.45 255.255.255.255
+                                rule ntp-1 acl l4-protocol udp
+                                rule ntp-1 acl l4-src-port 123
+                                rule ntp-1 action permit
+                                rule ntp-1 apply
+                                !
+                                rule ntp-2 acl ingress all-port
+                                rule ntp-2 acl dip ${ip} 255.255.255.255
+                                rule ntp-2 acl l4-protocol udp
+                                rule ntp-2 acl l4-dst-port 123
+                                rule ntp-2 action drop
+                                rule ntp-2 apply
+                                !
+                                snmp trap-source-ip ${ip}
+                                !
+                                ip route default ${gw}
+                                !
+                                syslog forward 118.217.79.155 info
+                                syslog forward 1.255.90.53 info
+                                syslog forward source-ip ${ip}
+                                !
+                                gpon monitor timeout 60 retry-count 5 lock-count 10
+                                !
+                                qos queue queue-id 0 drop-threshold low 1470 high 1500
+                                !
+                                gateway-monitor
+                                gateway-address enable
+                                ping-interval 120
+                                reboot-on 5 failures
+                                lock-on 3 reboots
+                                lock-duration 60 minutes
+                                end
+                                !
+                                wr m
+                                `,
+                    "DSW1324G":  `
+                                 conf t
+                                 hostname ${host}
+                                 !
+                                 no syslog remote 1.255.90.53
+                                 syslog remote 118.217.79.155 priority errors
+                                 syslog remote 1.255.90.53 priority informational
+                                 !
+                                 int range ge1-24
+                                 ${vlan === '700' ? vlan700config["DSW1324G"] : ''}
+                                 storm-control broadcast 20
+                                 storm-control multicast 15
+                                 storm-control dlf 5
+                                 no shutdown
+                                 exit
+                                 !
+                                 interface vlan160
+                                 ip address ${ip}/${sub}
+                                 exit
+                                 !
+                                 ip route 0.0.0.0/0 ${gw}
+                                 !
+                                 ip dhcp option82
+                                 system-remote-id ip ${ip}
+                                 exit
+                                 !
+                                 wr m
+                               `,
+                    "V2224GB":  `
+                               conf t
+                               hostname ${host}
+                               !
+                               syslog output info remote 118.217.79.155
+                               syslog output info remote 1.255.90.53
+                               !
+                               command-history-log enable
+                               command-history-log enable default
+                               !
+                               debug packet log 500 80 30 4
+                               !
+                               bridge
+                               !
+                               mac aging-time 1800
+                               !
+                               vlan create 160
+                               vlan add br160 26,28-30 tagged
+                               !
+                               ${vlan === '700' ? vlan700config["V2224GB"] : ''}
+                               vlan del default 1-24
+                               !
+                               no storm-control broadcast
+                               no storm-control multicast
+                               no storm-control dlf
+                               !
+                               storm-control broadcast 20 1-24
+                               storm-control multicast 15 1-24
+                               storm-control dlf 5 1-24
+                               storm-control broadcast 100 25,27
+                               storm-control dlf 100 25,27
+                               !
+                               mac-flood-guard 1-24 50
+                               mac-flood-guard unblock-time 1800
+                               !
+                               loop-detect 1-24 timer 1800
+                               !
+                               port enable 1-24
+                               !
+                               auto-reset ping enable
+                               exit
+                               !
+                               int br160
+                               no shutdown
+                               ip address ${ip}/${sub}
+                               exit
+                               !
+                               flow dst_tcp23_skb create
+                               ip 210.94.1.0/24 any tcp any 23
+                               apply
+                               exit
+                               !
+                               flow dst_tcp23_pumbo create
+                               ip 210.220.72.192/28 any tcp any 23
+                               apply
+                               exit
+                               !
+                               flow dst_tcp23_fact create
+                               ip 118.217.79.0/24 any tcp any 23
+                               apply
+                               exit
+                               !
+                               flow dst_tcp23_ednms create
+                               ip 218.50.241.0/24 any tcp any 23
+                               apply
+                               exit
+                               !
+                               flow dst_tcp23_jungbo create
+                               ip 211.117.39.96/27 any tcp any 23
+                               apply
+                               exit
+                               !
+                               flow dst_tcp23_deny create
+                               ip any any tcp any 23
+                               apply
+                               exit
+                               !
+                               flow telnet_jungbo create
+                               ip 211.117.39.96/27 any tcp any 23
+                               apply
+                               exit
+                               !
+                               class dst_tcp23_permit flow dst_tcp23_skb dst_tcp23_pumbo dst_tcp23_fact
+                               class dst_tcp23_permit flow dst_tcp23_ednms dst_tcp23_jungbo
+                               !
+                               policer dst_tcp23_deny create
+                               counter
+                               apply
+                               exit
+                               !
+                               policy RMA_deny modify
+                               action match block-forward-cpu
+                               apply
+                               exit
+                               !
+                               policy dst_tcp23_permit create
+                               include-class dst_tcp23_permit
+                               priority medium
+                               interface-binding vlan any
+                               action match permit
+                               apply
+                               exit
+                               !
+                               policy dst_tcp23_deny create
+                               include-flow dst_tcp23_deny
+                               include-policer dst_tcp23_deny
+                               priority low
+                               interface-binding port ingress 25,27
+                               action match deny
+                               apply
+                               exit
+                               !
+                               ip dhcp option82
+                               system-remote-id ip ${ip}
+                               exit
+                               !
+                               ip arp inspection vlan 160
+                               !
+                               ip igmp snooping report-suppression reporter ${ip}
+                               !
+                               ip igmp filter port 25,27-30 packet-type reportv2
+                               ip igmp filter port 25,27-30 packet-type leave
+                               !
+                               ip route 0.0.0.0/0 ${gw}
+                               end
+                               !
+                               wr m
+                               `,
+                    "V2924GB":  `
+                               conf t
+                               hostname ${host}
+                               !
+                               syslog output info remote 118.217.79.155
+                               syslog output info remote 1.255.90.53
+                               !
+                               command-history-log enable
+                               command-history-log enable default
+                               !
+                               debug packet log 500 80 30 4
+                               !
+                               ip multicast-source trust port 25-26
+                               !
+                               bridge
+                               !
+                               no storm-control broadcast
+                               no storm-control multicast
+                               no storm-control dlf
+                               storm-control broadcast 20 1-24
+                               storm-control multicast 15 1-24
+                               storm-control dlf 5 1-24
+                               storm-control broadcast 100 25,27
+                               storm-control dlf 100 25,27
+                               !
+                               mac aging-time 1800
+                               !
+                               ${vlan === '700' ? vlan700config["V2924GB"] : ''}
+                               vlan del default 1-24
+                               !
+                               port enable 1-24
+                               !
+                               auto-reset ping enable
+                               end
+                               !
+                               conf t
+                               int br160
+                               ip address ${ip}/${sub}
+                               exit
+                               !
+                               ip dhcp option82
+                               system-remote-id ip ${ip}
+                               exit
+                               !
+                               arp access-list DAI
+                               permit dhcp-snoop-inspection
+                               exit
+                               ip arp inspection validate src-mac dst-mac ip
+                               ip arp inspection trust port 25-30
+                               ip arp inspection vlan 160,200,600,700
+                               ip arp inspection filter DAI vlan 200,600,700
+                               ip arp inspection log-buffer entries 1024
+                               ip arp inspection log-buffer logs 0 interval 86400
+                               !
+                               ip igmp snooping report-suppression reporter ${ip}
+                               !
+                               ip route 0.0.0.0/0 ${gw}
+                               end
+                               !
+                               wr m
+                               `,
+                    "V2916GB":  `
+                               conf t
+                               hostname ${host}
+                               !
+                               syslog output info remote 118.217.79.155
+                               syslog output info remote 1.255.90.53
+                               !
+                               command-history-log enable
+                               command-history-log enable default
+                               !
+                               debug packet log 500 80 30 4
+                               !
+                               ip multicast-source trust port 17-18
+                               !
+                               bridge
+                               !
+                               no storm-control broadcast
+                               no storm-control multicast
+                               no storm-control dlf
+                               storm-control broadcast 20 1-16
+                               storm-control multicast 15 1-16
+                               storm-control dlf 5 1-16
+                               storm-control broadcast 100 17-18
+                               storm-control dlf 100 17-18
+                               !
+                               mac aging-time 1800
+                               !
+                               ${vlan === '700' ? vlan700config["V2916GB"] : ''}
+                               vlan del default 1-16
+                               !
+                               port enable 1-16
+                               !
+                               auto-reset ping enable
+                               end
+                               !
+                               conf t
+                               int br160
+                               ip address ${ip}/${sub}
+                               exit
+                               !
+                               ip dhcp option82
+                               system-remote-id ip ${ip}
+                               exit
+                               !
+                               arp access-list DAI
+                               permit dhcp-snoop-inspection
+                               exit
+                               ip arp inspection validate src-mac dst-mac ip
+                               ip arp inspection trust port 17-19
+                               ip arp inspection vlan 160,200,600,700
+                               ip arp inspection filter DAI vlan 200,600,700
+                               ip arp inspection log-buffer entries 1024
+                               ip arp inspection log-buffer logs 0 interval 86400
+                               !
+                               ip igmp snooping report-suppression reporter ${ip}
+                               !
+                               ip route 0.0.0.0/0 ${gw}
+                               end
+                               !
+                               wr m
+                               `,
+                    "V2808M":  `
+                               cconf t
+                               hostname ${host}
+                               !
+                               no syslog output info remote 118.217.79.153
+                               syslog output info remote 118.217.79.155
+                               syslog output info remote 1.255.90.53
+                               !
+                               command-history-log enable
+                               command-history-log enable default
+                               !
+                               debug packet log 500 80 30 4
+                               !
+                               ip multicast-source trust port 9-10
+                               !
+                               bridge
+                               !
+                               no storm-control broadcast
+                               no storm-control multicast
+                               no storm-control dlf
+                               storm-control broadcast 20 1-8
+                               storm-control multicast 15 1-8
+                               storm-control dlf 5 1-8
+                               storm-control broadcast 100 9-10
+                               storm-control dlf 100 9-10
+                               !
+                               mac aging-time 1800
+                               !
+                               ${vlan === '700' ? vlan700config["V2808M"] : ''}
+                               vlan del default 1-8
+                               !
+                               port enable 1-8
+                               !
+                               auto-reset ping enable
+                               end
+                               !
+                               conf t
+                               int br160
+                               ip address ${ip}/${sub}
+                               exit
+                               !
+                               ip dhcp option82
+                               system-remote-id ip ${ip}
+                               exit
+                               !
+                               ip igmp snooping report-suppression reporter ${ip}
+                               !
+                               ip igmp filter port 9-11 packet-type reportv2
+                               ip igmp filter port 9-11 packet-type leave
+                               !
+                               ip route 0.0.0.0/0 ${gw}
+                               end
+                               !
+                               wr m
+                               `,
+                    "HN5324XG": `
+                                conf t
+                                hostname ${host}
+                                !
+                                snmp-server trap source-ip ${ip}
+                                !
+                                logging server 118.217.79.155 6
+                                logging server 1.255.90.53 6
+                                logging server forward source-ip ${ip}
+                                !
+                                no service-policy input dscp
+                                !
+                                policy-map dscp
+                                class str_vod_24
+                                set cos 3
+                                set queue 3
+                                exit
+                                class str_iptv_32
+                                set cos 5
+                                set queue 5
+                                exit
+                                class dscp46
+                                set cos 7
+                                set queue 7
+                                exit
+                                exit
+                                !
+                                service-policy input dscp dscp
+                                end
+                                !
+                                conf t
+                                ip dhcp snooping relay-agent-option remote-id ip ${ip}
+                                ip igmp snooping system-src-ip ${ip}
+                                !
+                                interface range ge1-24
+                                ${vlan === '700' ? vlan700config["HN5324XG"] : ''}
+                                no shutdown
+                                exit
+                                !
+                                !
+                                int vlan160
+                                ip address ${ip}/${sub}
+                                exit
+                                !
+                                ip route 0.0.0.0/0 ${gw}
+                                !
+                                mng configuration
+                                threshold temperature high 50
+                                ping monitor type interval 120
+                                ping monitor type threshold 5
+                                enable ping monitor
+                                evm lockout interval 40
+                                evm lockout count 3
+                                enable evm lockout
+                                enable evm watchdog
+                                end
+                                !
+                                wr m
+                                `,
+                    "HN5424XG": `
+                                conf t
+                                hostname ${host}
+                                !
+                                interface vlan160
+                                ip address ${ip}/${sub}
+                                no shutdown
+                                !
+                                ip route 0.0.0.0/0 ${gw}
+                                !
+                                snmp-server trap-source agent-address ${ip}
+                                !
+                                syslog forward 118.217.79.155
+                                syslog forward 1.255.90.53
+                                syslog forward source-ip ${ip}
+                                !
+                                l2 port
+                                ${vlan === '700' ? vlan700config["HN5424XG"] : ''}
+                                enable 1/1-1/28
+                                exit
+                                !
+                                ip igmp snooping system-src interface vlan160
+                                !
+                                ip dhcp relay-agent-info remote-id ip ${ip}
+                                !
+                                snmp-server trap target-address 118.217.79.190 community hana#valley3
+                                !
+                                wr m
+                                `,
+                    "GNT3510":  `
+                                conf t
+                                hostname ${host}
+                                !
+                                storm-control set 1-8 b rate 20
+                                storm-control set 1-8 uu rate 5
+                                storm-control set 9-10 uu rate 30
+                                storm-control set 1-8 um rate 15
+                                !
+                                ntp interval 1440
+                                vlan 160
+                                ip address ${ip}/${sub}
+                                exit
+                                ${vlan === '700' ? vlan700config["GNT3510"] : ''}
+                                !
+                                system management-address ${ip}
+                                !
+                                port 1-8
+                                enable
+                                !
+                                dhcp option relay-agent-info policy append port 9-10
+                                !
+                                rule ntp acl ingress all-port
+                                rule ntp acl sip 124.111.69.44 255.255.255.255
+                                rule ntp acl l4-protocol udp
+                                rule ntp acl l4-src-port 123
+                                rule ntp action permit
+                                rule ntp apply
+                                !
+                                rule ntp-1 acl ingress all-port
+                                rule ntp-1 acl sip 124.111.69.45 255.255.255.255
+                                rule ntp-1 acl l4-protocol udp
+                                rule ntp-1 acl l4-src-port 123
+                                rule ntp-1 action permit
+                                rule ntp-1 apply
+                                !
+                                rule ntp-2 acl ingress all-port
+                                rule ntp-2 acl dip ${ip} 255.255.255.255
+                                rule ntp-2 acl l4-protocol udp
+                                rule ntp-2 acl l4-dst-port 123
+                                rule ntp-2 action drop
+                                rule ntp-2 apply
+                                !
+                                snmp trap-source-ip ${ip}
+                                !
+                                ip route default ${gw}
+                                !
+                                syslog forward 118.217.79.155 info
+                                syslog forward 1.255.90.53 info
+                                syslog forward source-ip ${ip}
+                                !
+                                gateway-monitor
+                                gateway-address enable
+                                ping-interval 120
+                                reboot-on 5 failures
+                                lock-on 3 reboots
+                                lock-duration 60 minutes
+                                end
+                                !
+                                wr m
+                                `,
+                    "GNT3520":  `
+                                conf t
+                                hostname ${host}
+                                !
+                                vlan 160
+                                ip address ${ip}/${sub}
+                                exit
+                                !
+                                ip dhcp simplified-option82 remoteid ${ip}
+                                !
+                                ip igmp snooping report-suppression src-ip ${ip}
+                                !
+                                syslog agentip ${ip}
+                                !
+                                system monitor auto-reboot gateway
+                                !
+                                ip route 0.0.0.0/0 ${gw}
+                                !
+                                ${vlan === '700' ? vlan700config["GNT3520"] : ''}
+                                !
+                                port ge1-ge8
+                                no shutdown
+                                exit
+                                !
+                                syslog remote server 118.217.79.155
+                                syslog remote server 1.255.90.53
+                                ex
+                                !
+                                wr m
+                                `,
+                    "V5924C":  `
+                                업데이트 중 입니다.
+                                `,
+                    "V5924O":  `
+                                업데이트 중 입니다.
+                                `,
+                    "EX-5124B PLUS":  `
+                                업데이트 중 입니다.
+                                `,
+                    "VNET 2324K":  `
+                                업데이트 중 입니다.
+                                `,
+                    "KMG-32B":  `
+                                업데이트 중 입니다.
+                                `,
+                    "KMG-32E":  `
+                                업데이트 중 입니다.
+                                `,
+                    "DV-232A":  `
+                                업데이트 중 입니다.
+                                `,
+                    "DV-432A":  `
+                                업데이트 중 입니다.
+                                `        
+                },
+                password: {
+                    "H5224G":   `
+                                conf t
+                                username root password ghados3! admin
+                                enable root password ghados3!
+                                end
+                                wr m
+                                `,
+                    "H5216G":  `
+                                conf t
+                                username root password ghados3! admin
+                                enable root password ghados3!
+                                end
+                                wr m
+                                `,
+                    "H5208G":  `
+                                conf t
+                                username root password ghados3! admin
+                                enable root password ghados3!
+                                end
+                                wr m
+                                `,
+                    "DSW1324G":  `
+                                 conf t
+                                 service password-encryption
+                                 username root level config password ghados3!
+                                 !
+                                 enable password ghados3!
+                                 end
+                                 !
+                                 wr m
+                               `,
+                    "V2224GB":  `
+                               conf t
+                               passwd
+                               ghados3! =====> 수동입력하세요
+                               ghados3! =====> 수동입력하세요
+                               !
+                               passwd enable ghados3!
+                               service password-encryption
+                               end
+                               !
+                               wr m
+                               `,
+                    "V2924GB":  `
+                               conf t
+                               passwd
+                               ghados3! =====> 수동입력하세요
+                               ghados3! =====> 수동입력하세요
+                               !
+                               passwd enable ghados3!
+                               !
+                               service password-encryption
+                               end
+                               !
+                               wr m
+                               `,
+                    "V2916GB":  `
+                               conf t
+                               passwd
+                               ghados3! =====> 수동입력하세요
+                               ghados3! =====> 수동입력하세요
+                               !
+                               passwd enable ghados3!
+                               !
+                               service password-encryption
+                               end
+                               !
+                               wr m
+                               `,
+                    "V2808M":  `
+                               conf t
+                               passwd
+                               ghados3! =====> 수동입력하세요
+                               ghados3! =====> 수동입력하세요
+                               !
+                               passwd enable ghados3!
+                               !
+                               service password-encryption
+                               end
+                               !
+                               wr m
+                               `,
+                    "HN5324XG": `
+                                conf t
+                                username-remote admin role network-admin password encrypted ghados3!
+                                !
+                                enable password ghados3!
+                                end
+                                !
+                                wr m
+                                `,
+                    "HN5424XG": `
+                                conf t
+                                username admin password ghados3!
+                                !
+                                enable password ghados3!
+                                end 
+                                !
+                                wr m
+                                `,
+                    "GNT3510":  `
+                                conf t
+                                username root password ghados3! admin
+                                !
+                                enable root password ghados3!
+                                end
+                                !
+                                wr m
+                                `,
+                    "GNT3520":  `
+                                con t
+                                passwd
+                                ghados3! =====> 수동입력하세요
+                                ghados3! =====> 수동입력하세요
+                                !
+                                enable password ghados3!
+                                end
+                                !
+                                wr m
+                                `,
+                    "V5924C":  `
+                                업데이트 중 입니다.
+                                `,
+                    "V5924O":  `
+                                업데이트 중 입니다.
+                                `,
+                    "EX-5124B PLUS":  `
+                                업데이트 중 입니다.
+                                `,
+                    "VNET 2324K":  `
+                                업데이트 중 입니다.
+                                `,
+                    "KMG-32B":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `,
+                    "KMG-32E":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `,
+                    "DV-232A":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `,
+                    "DV-432A":  `
+                                ◆ [STEP.02] CONFIG 설정만 진행하세요.
+                                `
+                }
+            };
+
+            const mKey = templates.restore[model] ? model : "H5224G";
+
+            document.getElementById('out1').innerText = cleanTemplate(templates.restore[mKey]);
+            document.getElementById('out2').innerText = cleanTemplate(templates.config[mKey]);
+            document.getElementById('out3').innerText = cleanTemplate(templates.password[mKey]);
+
+        } catch (e) { alert(e); }
+    }
+
+    
+    function copyText(id) {
+        const text = document.getElementById(id).innerText;
+        if (text.includes("설정값을 생성하세요")) return;
+
+        // 1. 최신 Clipboard API 시도
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert("복사되었습니다!");
+            }).catch(err => {
+                console.error("클립보드 API 실패, 대안 시도:", err);
+                fallbackCopyText(text);
+            });
+        } else {
+            // 2. HTTP 환경이거나 API 미지원 시 대안 방식 사용
+            fallbackCopyText(text);
+        }
+    }
+
+    function fallbackCopyText(text) {
+        // 임시 textarea 생성
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+    
+        // 모바일에서 화면이 튀지 않도록 스타일 설정
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+    
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, 99999); // 모바일 대응용 범위 지정
+
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                alert("복사되었습니다!");
+            } else {
+                alert("복사에 실패했습니다.");
+            }
+        } catch (err) {
+            alert("이 브라우저에서는 복사 기능을 지원하지 않습니다.");
+        }
+
+        document.body.removeChild(textArea);
+    }
+
+    // 시리얼 통신
+    document.getElementById('connect-btn').addEventListener('click', async () => {
+        try {
+            // 선택된 Baud Rate 값 확인
+            const baudRateValue = parseInt(document.getElementById('baudrate').value);
+        
+            if (!port) {
+                port = await navigator.serial.requestPort();
+            }
+
+            // 포트 열기 시도
+            await port.open({ 
+                baudRate: baudRateValue,
+                dataBits: 8,
+                stopBits: 1,
+                parity: "none",
+                flowControl: "none" 
+            });
+            
+            keepReading = true;
+            document.getElementById('connect-btn').style.display = 'none';
+            document.getElementById('disconnect-btn').style.display = 'inline-block';
+
+            // 상태 표시 업데이트 (추가)
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "온라인";
+            statusEl.style.backgroundColor = "#28a745";
+            statusEl.style.color = "#FFFFFF";
+            
+            writer = port.writable.getWriter();
+            if (fitAddon) fitAddon.fit();
+            term.writeln(""); // 한 줄 띄우기
+            term.writeln("\x1b[1;32m[시스템] 장비 연결에 성공하였습니다!\x1b[0m");
+            term.writeln("\x1b[1;32m[시스템] 이제 명령어를 입력하거나 스크립트를 붙여넣으세요.\x1b[0m");
+            term.writeln(""); 
+            readLoop();
+        } catch (err) {
+            console.error(err);
+            if (err.name === 'FramingError' || err.message.includes('Framing error')) {
+                alert("통신 속도(Baud Rate)가 맞지 않습니다. 장비 설정과 동일한지 확인하세요.");
+            } else {
+                alert("연결 오류: " + err.message);
+            }
+            // 연결 실패 시 상태 초기화
+            if (port) port = null;
+        }
+    });
+
+    document.getElementById('disconnect-btn').addEventListener('click', async () => {
+        keepReading = false;
+
+        try {
+            // 1. Writer 해제
+            if (writer) {
+                writer.releaseLock();
+                writer = null;
+            }
+
+            // 2. Reader 해제 (readLoop 내의 reader.cancel 호출)
+            if (reader) {
+                await reader.cancel();
+                // readLoop 내의 finally 구문에서 releaseLock이 실행됨
+            }
+
+            // 3. 포트 닫기
+            if (port) {
+                await port.close();
+                port = null;
+            }
+
+            // 4. UI 및 터미널 초기화
+            document.getElementById('connect-btn').style.display = 'inline-block';
+            document.getElementById('disconnect-btn').style.display = 'none';
+
+            // 상태 표시 업데이트
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "오프라인";
+            statusEl.style.backgroundColor = "#444";
+            statusEl.style.color = "#aaa"; // 원래의 회색 계열로 복구
+        
+            term.writeln("\r\n\x1b[1;31m[시스템]\x1b[0m 장비 연결이 해제되었습니다.\n");
+            term.writeln("\x1b[1;33m[시스템]\x1b[0m Connect 버튼을 눌러 장비에 연결하세요.");
+        
+        } catch (err) {
+            console.error("연결 해제 중 오류 발생:", err);
+            // 오류가 나더라도 상태는 복구
+            document.getElementById('connect-btn').style.display = 'inline-block';
+            document.getElementById('disconnect-btn').style.display = 'none';
+
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "오프라인";
+            statusEl.style.color = "#aaa";
+        }
+    });
+
+    async function readLoop() {
+        while (port && port.readable && keepReading) {
+            reader = port.readable.getReader();
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done || !keepReading) break;
+                    term.write(value);
+                }
+            } catch (error) {
+                // 읽기 도중 Framing Error 발생 시 처리
+                if (error.name === 'FramingError') {
+                    term.writeln("\r\n\x1b[1;31m[오류] Framing Error 발생! Baud Rate를 확인하세요.\x1b[0m");
+                }
+                console.error("Read error:", error);
+            } finally { 
+                if (reader) {
+                    reader.releaseLock();
+                    reader = null;
+                }
+            }
+            // 에러 발생 시 잠시 대기 후 재시도 방지 또는 루프 탈출
+            if (!keepReading) break;
+        }
+    }
+
+    async function sendWithDelay(text, delay, signal) {
+        const encoder = new TextEncoder();
+        for (let i = 0; i < text.length; i++) {
+            // 중단 신호가 들어왔는지 확인
+            if (signal && signal.aborted) {
+                throw new DOMException("Aborted", "AbortError");
+            }
+            
+            await writer.write(encoder.encode(text[i]));
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+        
+</script>
+</body>
+</html>
